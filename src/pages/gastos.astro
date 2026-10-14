@@ -1,0 +1,194 @@
+---
+import AppLayout from '../layouts/AppLayout.astro';
+import Modal from '../components/Modal.astro';
+import Icon from '../components/Icon.astro';
+---
+<AppLayout titulo="Gastos" subtitulo="Mano de obra, combustible, veterinaria, semen y extras">
+    <button slot="acciones" type="button" class="btn btn-primario" id="btn-nuevo"><Icon name="plus" /> Nuevo gasto</button>
+
+    <div class="mb-4 flex flex-wrap items-center justify-between gap-3">
+        <div class="pestanas" role="tablist" id="tabs">
+        <button class="pestana" role="tab" aria-selected="true" data-panel="p-registros">Gastos del mes</button>
+        <button class="pestana" role="tab" aria-selected="false" data-panel="p-resumen">Resumen anual</button>
+        </div>
+        <div class="flex gap-2">
+        <input type="month" class="input w-auto" id="mes" aria-label="Mes" />
+        <select class="input w-auto" id="anio" aria-label="Año" hidden></select>
+        </div>
+    </div>
+
+    <div id="p-registros">
+        <div class="mb-4 grid grid-cols-2 gap-3 sm:grid-cols-4 xl:grid-cols-7" id="kpis"></div>
+        <section class="tarjeta">
+        <div class="tabla-contenedor"><table class="tabla tabla-movil" id="t-gastos"></table></div>
+        </section>
+    </div>
+
+    <section id="p-resumen" class="tarjeta" hidden>
+        <div class="tarjeta-cabecera"><h2 class="tarjeta-titulo">Gastos por mes y categoría</h2></div>
+        <div class="tabla-contenedor"><table class="tabla tabla-movil" id="t-resumen"></table></div>
+    </section>
+
+    <Fragment slot="modales">
+        <Modal id="m-gasto" titulo="Nuevo gasto">
+        <input type="hidden" name="id" />
+        <div class="grid grid-cols-2 gap-3">
+            <div class="campo">
+            <label class="etiqueta" for="g-fecha">Fecha</label>
+            <input class="input" id="g-fecha" name="fecha" type="date" required />
+            </div>
+            <div class="campo">
+            <label class="etiqueta" for="g-cat">Categoría</label>
+            <select class="input" id="g-cat" name="categoria" required></select>
+            </div>
+        </div>
+        <div class="campo">
+            <label class="etiqueta" for="g-desc">Descripción</label>
+            <input class="input" id="g-desc" name="descripcion" required maxlength="160" placeholder="Ej.: Sueldo de octubre, gasoil, vacuna" />
+        </div>
+        <div class="grid grid-cols-2 gap-3">
+            <div class="campo">
+            <label class="etiqueta" for="g-cant">Cantidad <span class="font-normal text-texto-3">(opcional)</span></label>
+            <input class="input" id="g-cant" name="cantidad" type="number" min="0.01" step="0.01" placeholder="Litros, dosis…" />
+            </div>
+            <div class="campo">
+            <label class="etiqueta" for="g-monto">Monto ($)</label>
+            <input class="input" id="g-monto" name="monto" type="number" min="0" step="0.01" required />
+            </div>
+        </div>
+        <div class="campo">
+            <label class="etiqueta" for="g-notas">Notas</label>
+            <textarea class="input" id="g-notas" name="notas" rows="2"></textarea>
+        </div>
+        </Modal>
+    </Fragment>
+</AppLayout>
+
+<script>
+    import { supabase } from '../lib/supabase';
+    import { iniciarPagina } from '../lib/sesion';
+    import { anioActual, esc, fecha, hoyISO, mesActual, nombreMesSolo, numero, pesos, rangoMes } from '../lib/formato';
+    import { aviso, avisoError, alAccion, botonAccion, conCarga, confirmar, eliminarFila, guardarFila, leerForm, llenarForm, modal, numONull, opcionesAnios, pestanas, renderTabla, tablaCargando, textoONull, type Columna } from '../lib/ui';
+    import { CATEGORIAS_GASTO, CATEGORIAS_GASTO_CORTO, opciones } from '../lib/etiquetas';
+
+    const tGas = document.getElementById('t-gastos') as HTMLTableElement;
+    const tRes = document.getElementById('t-resumen') as HTMLTableElement;
+    const inpMes = document.getElementById('mes') as HTMLInputElement;
+    const selAnio = document.getElementById('anio') as HTMLSelectElement;
+    inpMes.value = mesActual();
+    let gastos: any[] = [];
+
+    pestanas(document.getElementById('tabs')!, (p) => {
+        inpMes.hidden = p !== 'p-registros';
+        selAnio.hidden = p !== 'p-resumen';
+    });
+
+    const cats = Object.keys(CATEGORIAS_GASTO_CORTO);
+
+    async function cargarMes() {
+        tablaCargando(tGas, 5, 4);
+        const { desde, hasta } = rangoMes(inpMes.value || mesActual());
+        const { data, error } = await supabase.from('gastos').select('*').gte('fecha', desde).lte('fecha', hasta).order('fecha', { ascending: false }).order('id', { ascending: false });
+        if (error) return avisoError(error);
+        gastos = data ?? [];
+        const total = gastos.reduce((a, g) => a + Number(g.monto), 0);
+        const porCat = (c: string) => gastos.filter((g) => g.categoria === c).reduce((a, g) => a + Number(g.monto), 0);
+        document.getElementById('kpis')!.innerHTML =
+        `<div class="tarjeta kpi col-span-2 sm:col-span-4 xl:col-span-1"><span class="kpi-etiqueta">Total del mes</span><span class="kpi-valor">${pesos(total)}</span></div>` +
+        cats.map((c) => `<div class="tarjeta kpi"><span class="kpi-etiqueta">${CATEGORIAS_GASTO_CORTO[c]}</span><span class="kpi-valor !text-lg">${pesos(porCat(c))}</span></div>`).join('');
+
+        const col: Columna<any>[] = [
+        { titulo: 'Fecha', valor: (g) => fecha(g.fecha) },
+        { titulo: 'Categoría', valor: (g) => `<span class="badge">${CATEGORIAS_GASTO_CORTO[g.categoria]}</span>` },
+        { titulo: 'Descripción', valor: (g) => esc(g.descripcion) },
+        { titulo: 'Cantidad', valor: (g) => (g.cantidad !== null ? numero(g.cantidad) : '—'), clase: 'der' },
+        { titulo: 'Monto', valor: (g) => `<strong>${pesos(g.monto)}</strong>`, clase: 'der' },
+        { titulo: '', clase: 'acciones', valor: (g) => botonAccion('editar', g.id, 'pencil', 'Editar') + botonAccion('eliminar', g.id, 'trash', 'Eliminar') },
+        ];
+        renderTabla(tGas, col, gastos, { vacio: 'No hay gastos registrados en este mes.', pie: ['Total', '', '', '', pesos(total), ''] });
+    }
+
+    async function cargarResumen() {
+        const { data, error } = await supabase.from('v_balance_mensual').select('mes, ' + cats.join(', ')).order('mes');
+        if (error) return avisoError(error);
+        const filas = (data ?? []) as any[];
+        const anios = [...new Set(filas.map((r) => Number(r.mes.slice(0, 4))))];
+        selAnio.innerHTML = opcionesAnios(anios, selAnio.value ? Number(selAnio.value) : anioActual());
+        const anio = Number(selAnio.value);
+        const delAnio = filas.filter((r) => Number(r.mes.slice(0, 4)) === anio);
+        const meses = delAnio
+        .map((r) => ({ mes: Number(r.mes.slice(5, 7)), ...Object.fromEntries(cats.map((c) => [c, Number(r[c])])) }) as any)
+        .map((r) => ({ ...r, total: cats.reduce((a, c) => a + r[c], 0) }))
+        .filter((r) => r.total > 0);
+        const col: Columna<any>[] = [
+        { titulo: 'Mes', valor: (r) => nombreMesSolo(r.mes) },
+        ...cats.map((c) => ({ titulo: CATEGORIAS_GASTO_CORTO[c], valor: (r: any) => pesos(r[c]), clase: 'der' })),
+        { titulo: 'Total', valor: (r) => `<strong>${pesos(r.total)}</strong>`, clase: 'der' },
+        ];
+        const tot = (k: string) => meses.reduce((a, r) => a + r[k], 0);
+        renderTabla(tRes, col, meses, {
+        vacio: `No hay gastos en ${anio}.`,
+        pie: [`Total ${anio}`, ...cats.map((c) => pesos(tot(c))), pesos(tot('total'))],
+        });
+    }
+
+    inpMes.addEventListener('change', () => inpMes.value && cargarMes());
+    selAnio.addEventListener('change', cargarResumen);
+
+    const m = modal('m-gasto');
+    const f = m.form;
+    (f.elements.namedItem('categoria') as HTMLSelectElement).innerHTML = '<option value="">Elegí…</option>' + opciones(CATEGORIAS_GASTO);
+
+    document.getElementById('btn-nuevo')!.addEventListener('click', () => {
+        f.reset();
+        llenarForm(f, { id: '', fecha: hoyISO() });
+        m.abrir('Nuevo gasto');
+    });
+
+    alAccion(tGas, {
+        editar: (id) => {
+        const g = gastos.find((x) => String(x.id) === id);
+        if (!g) return;
+        f.reset();
+        llenarForm(f, { ...g, monto: Number(g.monto), cantidad: g.cantidad !== null ? Number(g.cantidad) : '' });
+        m.abrir('Editar gasto');
+        },
+        eliminar: async (id) => {
+        if (!(await confirmar('¿Eliminar este gasto?', { boton: 'Eliminar' }))) return;
+        try {
+            await eliminarFila('gastos', id);
+            aviso('Gasto eliminado');
+            cargar();
+        } catch (e) {
+            avisoError(e);
+        }
+        },
+    });
+
+    f.addEventListener('submit', (ev) => {
+        ev.preventDefault();
+        conCarga(f.querySelector('[data-guardar]'), async () => {
+        const d = leerForm(f);
+        try {
+            await guardarFila(
+            'gastos',
+            { fecha: d.fecha, categoria: d.categoria, descripcion: d.descripcion, cantidad: numONull(d.cantidad), monto: Number(d.monto), notas: textoONull(d.notas) },
+            d.id || null
+            );
+            m.cerrar();
+            aviso(d.id ? 'Gasto actualizado' : 'Gasto registrado');
+            if (d.fecha.slice(0, 7) !== inpMes.value) inpMes.value = d.fecha.slice(0, 7);
+            cargar();
+        } catch (e) {
+            avisoError(e);
+        }
+        });
+    });
+
+    function cargar() {
+        cargarMes();
+        cargarResumen();
+    }
+
+    iniciarPagina({ soloDueno: true }).then(cargar);
+</script>

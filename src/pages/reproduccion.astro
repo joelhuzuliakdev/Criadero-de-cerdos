@@ -1,0 +1,156 @@
+---
+import AppLayout from '../layouts/AppLayout.astro';
+import ReproModales from '../components/ReproModales.astro';
+import Icon from '../components/Icon.astro';
+---
+<AppLayout titulo="Reproducción" subtitulo="Servicios, partos esperados y lactancias en curso">
+    <button slot="acciones" type="button" class="btn" id="btn-servicio"><Icon name="droplet" /> Registrar servicio</button>
+    <button slot="acciones" type="button" class="btn btn-primario" id="btn-parto"><Icon name="baby-carriage" /> Registrar parto</button>
+
+    <div class="mb-5 grid grid-cols-2 gap-3 lg:grid-cols-4">
+        <div class="tarjeta kpi"><span class="kpi-etiqueta">A confirmar preñez</span><span class="kpi-valor" data-k="pendientes">—</span><span class="kpi-detalle">Servidas sin confirmar</span></div>
+        <div class="tarjeta kpi"><span class="kpi-etiqueta">Preñadas</span><span class="kpi-valor" data-k="prenadas">—</span><span class="kpi-detalle">Confirmadas</span></div>
+        <div class="tarjeta kpi"><span class="kpi-etiqueta">Partos próximos 7 días</span><span class="kpi-valor" data-k="proximos">—</span><span class="kpi-detalle">Incluye atrasados</span></div>
+        <div class="tarjeta kpi"><span class="kpi-etiqueta">En lactancia</span><span class="kpi-valor" data-k="lactancias">—</span><span class="kpi-detalle">Camadas sin destetar</span></div>
+    </div>
+
+    <div class="grid gap-5">
+        <section class="tarjeta">
+        <div class="tarjeta-cabecera">
+            <h2 class="tarjeta-titulo">Partos esperados</h2>
+            <span class="text-xs text-texto-3">Fecha probable = servicio + 114 días</span>
+        </div>
+        <div class="tabla-contenedor"><table class="tabla tabla-movil" id="t-esperados"></table></div>
+        </section>
+
+        <section class="tarjeta">
+        <div class="tarjeta-cabecera">
+            <h2 class="tarjeta-titulo">Lactancias en curso</h2>
+            <span class="text-xs text-texto-3">Registrá el destete para cerrar la camada</span>
+        </div>
+        <div class="tabla-contenedor"><table class="tabla tabla-movil" id="t-lactancias"></table></div>
+        </section>
+    </div>
+
+    <Fragment slot="modales"><ReproModales /></Fragment>
+</AppLayout>
+
+<script>
+    import { supabase } from '../lib/supabase';
+    import { iniciarPagina } from '../lib/sesion';
+    import { diasEntre, esc, fecha, hoyISO } from '../lib/formato';
+    import { aviso, avisoError, alAccion, botonAccion, guardarFila, renderTabla, tablaCargando, type Columna } from '../lib/ui';
+    import { DIAS_AVISO_DESTETE, DIAS_CONFIRMAR_PRENEZ, RESULTADOS_SERVICIO } from '../lib/etiquetas';
+    import { abrirDestete, abrirParto, abrirServicio, iniciarRepro } from '../lib/repro';
+
+    const tEsp = document.getElementById('t-esperados') as HTMLTableElement;
+    const tLac = document.getElementById('t-lactancias') as HTMLTableElement;
+    let servicios: any[] = [];
+    let lactancias: any[] = [];
+
+    const set = (k: string, v: number) => ((document.querySelector(`[data-k="${k}"]`) as HTMLElement).textContent = String(v));
+    const enlaceCerda = (id: number, car: string) => `<a class="enlace" href="/cerdas/ficha/?id=${id}">${esc(car)}</a>`;
+
+    async function cargar() {
+        tablaCargando(tEsp, 6, 3);
+        tablaCargando(tLac, 5, 2);
+        const [s, p] = await Promise.all([
+        supabase.from('servicios').select('*, cerdas!inner(caravana, estado)').in('resultado', ['pendiente', 'prenada']).eq('cerdas.estado', 'activa').order('fecha_probable_parto'),
+        supabase.from('partos').select('*, cerdas(caravana)').is('destetados', null).order('fecha'),
+        ]);
+        if (s.error || p.error) return avisoError(s.error || p.error);
+        servicios = s.data ?? [];
+        lactancias = p.data ?? [];
+        render();
+    }
+
+    function render() {
+        const hoy = hoyISO();
+        set('pendientes', servicios.filter((s) => s.resultado === 'pendiente').length);
+        set('prenadas', servicios.filter((s) => s.resultado === 'prenada').length);
+        set('proximos', servicios.filter((s) => diasEntre(hoy, s.fecha_probable_parto) <= 7).length);
+        set('lactancias', lactancias.length);
+
+        const colEsp: Columna<any>[] = [
+        { titulo: 'Cerda', valor: (s) => enlaceCerda(s.cerda_id, s.cerdas.caravana) },
+        { titulo: 'Servicio', valor: (s) => fecha(s.fecha) },
+        { titulo: 'Días de gestación', valor: (s) => String(Math.max(diasEntre(s.fecha, hoy), 0)), clase: 'der' },
+        { titulo: 'Parto probable', valor: (s) => `<strong>${fecha(s.fecha_probable_parto)}</strong>`, clase: 'der' },
+        {
+            titulo: 'Faltan',
+            clase: 'der',
+            valor: (s) => {
+            const d = diasEntre(hoy, s.fecha_probable_parto);
+            if (d < 0) return `<span class="badge badge-error">Atrasado ${-d} d</span>`;
+            if (d === 0) return '<span class="badge badge-alerta">Hoy</span>';
+            if (d <= 7) return `<span class="badge badge-alerta">${d} d</span>`;
+            return `${d} d`;
+            },
+        },
+        {
+            titulo: 'Estado',
+            valor: (s) => {
+            const r = RESULTADOS_SERVICIO[s.resultado];
+            const confirmar = s.resultado === 'pendiente' && diasEntre(s.fecha, hoy) >= DIAS_CONFIRMAR_PRENEZ;
+            return `<span class="badge ${r.clase}">${r.texto}</span>${confirmar ? ' <span class="text-xs text-texto-3">(revisar)</span>' : ''}`;
+            },
+        },
+        {
+            titulo: '',
+            clase: 'acciones',
+            valor: (s) =>
+            (s.resultado === 'pendiente'
+                ? botonAccion('prenada', s.id, 'check', 'Confirmar preñez') + botonAccion('vacia', s.id, 'x', 'Marcar vacía (repite)')
+                : '') + botonAccion('parto', s.id, 'baby-carriage', 'Registrar parto'),
+        },
+        ];
+        renderTabla(tEsp, colEsp, servicios, { vacio: 'No hay cerdas servidas ni preñadas en este momento.' });
+
+        const colLac: Columna<any>[] = [
+        { titulo: 'Cerda', valor: (p) => enlaceCerda(p.cerda_id, p.cerdas.caravana) },
+        { titulo: 'Fecha de parto', valor: (p) => fecha(p.fecha) },
+        {
+            titulo: 'Días',
+            clase: 'der',
+            valor: (p) => {
+            const d = diasEntre(p.fecha, hoy);
+            return d >= DIAS_AVISO_DESTETE ? `<span class="badge badge-alerta">${d} d</span>` : `${d} d`;
+            },
+        },
+        { titulo: 'Nacidos vivos', valor: (p) => String(p.nacidos_vivos), clase: 'der' },
+        { titulo: '', clase: 'acciones', valor: (p) => botonAccion('destete', p.id, 'baby-carriage', 'Registrar destete') },
+        ];
+        renderTabla(tLac, colLac, lactancias, { vacio: 'No hay camadas en lactancia.' });
+    }
+
+    async function cambiarResultado(id: string, resultado: string) {
+        try {
+        await guardarFila('servicios', { resultado }, id);
+        aviso(resultado === 'prenada' ? 'Preñez confirmada' : 'Servicio marcado como vacío');
+        cargar();
+        } catch (e) {
+        avisoError(e);
+        }
+    }
+
+    alAccion(tEsp, {
+        prenada: (id) => cambiarResultado(id, 'prenada'),
+        vacia: (id) => cambiarResultado(id, 'vacia'),
+        parto: (id) => {
+        const s = servicios.find((x) => String(x.id) === id);
+        if (s) abrirParto({ cerdaId: s.cerda_id });
+        },
+    });
+    alAccion(tLac, {
+        destete: (id) => {
+        const p = lactancias.find((x) => String(x.id) === id);
+        if (p) abrirDestete(p, p.cerdas.caravana);
+        },
+    });
+
+    document.getElementById('btn-servicio')!.addEventListener('click', () => abrirServicio());
+    document.getElementById('btn-parto')!.addEventListener('click', () => abrirParto());
+
+    iniciarRepro(cargar);
+    iniciarPagina().then(cargar);
+</script>

@@ -1,0 +1,350 @@
+---
+import AppLayout from '../layouts/AppLayout.astro';
+import Modal from '../components/Modal.astro';
+import Icon from '../components/Icon.astro';
+---
+<AppLayout titulo="Ventas" subtitulo="Vía 1 (banco, con IVA) y Vía 2 · descuentan el stock automáticamente">
+    <button slot="acciones" type="button" class="btn btn-primario" id="btn-nueva"><Icon name="plus" /> Nueva venta</button>
+
+    <div class="mb-4 flex flex-wrap items-center justify-between gap-3">
+        <div class="pestanas" role="tablist" id="tabs">
+        <button class="pestana" role="tab" aria-selected="true" data-panel="p-registros">Ventas del mes</button>
+        <button class="pestana" role="tab" aria-selected="false" data-panel="p-resumen">Resumen mensual y anual</button>
+        </div>
+        <div class="flex gap-2">
+        <input type="month" class="input w-auto" id="mes" aria-label="Mes" />
+        <select class="input w-auto" id="anio" aria-label="Año" hidden></select>
+        </div>
+    </div>
+
+    <div id="p-registros">
+        <div class="mb-4 grid grid-cols-2 gap-3 lg:grid-cols-4">
+        <div class="tarjeta kpi"><span class="kpi-etiqueta">Vía 1 · total con IVA</span><span class="kpi-valor" data-k="v1">—</span><span class="kpi-detalle" data-k="v1d"></span></div>
+        <div class="tarjeta kpi"><span class="kpi-etiqueta">Vía 2 · total</span><span class="kpi-valor" data-k="v2">—</span><span class="kpi-detalle" data-k="v2d"></span></div>
+        <div class="tarjeta kpi"><span class="kpi-etiqueta">Animales vendidos</span><span class="kpi-valor" data-k="anim">—</span><span class="kpi-detalle" data-k="animd"></span></div>
+        <div class="tarjeta kpi"><span class="kpi-etiqueta">Precio promedio</span><span class="kpi-valor" data-k="pkg">—</span><span class="kpi-detalle">por kg neto, sin IVA</span></div>
+        </div>
+        <section class="tarjeta">
+        <div class="tabla-contenedor"><table class="tabla tabla-movil" id="t-ventas"></table></div>
+        </section>
+    </div>
+
+    <div id="p-resumen" class="grid gap-5" hidden>
+        <section class="tarjeta">
+        <div class="tarjeta-cabecera"><h2 class="tarjeta-titulo">Mes por mes</h2><span class="text-xs text-texto-3">Totales cobrados (Vía 1 incluye IVA)</span></div>
+        <div class="tabla-contenedor"><table class="tabla tabla-movil" id="t-mensual"></table></div>
+        </section>
+        <section class="tarjeta">
+        <div class="tarjeta-cabecera"><h2 class="tarjeta-titulo">Comparativa anual</h2></div>
+        <div class="tabla-contenedor"><table class="tabla tabla-movil" id="t-anual"></table></div>
+        </section>
+    </div>
+
+    <Fragment slot="modales">
+        <Modal id="m-venta" titulo="Nueva venta" ancho>
+        <input type="hidden" name="id" />
+        <div class="campo">
+            <span class="etiqueta">Vía de venta</span>
+            <div class="pestanas w-full sm:w-auto" role="radiogroup" id="sel-via">
+            <label class="pestana flex-1 text-center has-[:checked]:bg-superficie has-[:checked]:text-texto has-[:checked]:shadow-sm has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-marca">
+                <input type="radio" name="via" value="1" class="sr-only" required /> Vía 1 · Banco (con IVA)
+            </label>
+            <label class="pestana flex-1 text-center has-[:checked]:bg-superficie has-[:checked]:text-texto has-[:checked]:shadow-sm has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-marca">
+                <input type="radio" name="via" value="2" class="sr-only" /> Vía 2
+            </label>
+            </div>
+        </div>
+        <div class="grid grid-cols-2 gap-3 sm:grid-cols-3">
+            <div class="campo">
+            <label class="etiqueta" for="v-fecha">Fecha</label>
+            <input class="input" id="v-fecha" name="fecha" type="date" required />
+            </div>
+            <div class="campo">
+            <label class="etiqueta" for="v-cat">Categoría</label>
+            <select class="input" id="v-cat" name="categoria" required></select>
+            </div>
+            <div class="campo">
+            <label class="etiqueta" for="v-cant">Cantidad de animales</label>
+            <input class="input" id="v-cant" name="cantidad" type="number" min="1" step="1" required />
+            </div>
+            <div class="campo">
+            <label class="etiqueta" for="v-kilos">Kilos totales (balanza)</label>
+            <input class="input" id="v-kilos" name="kilos" type="number" min="0.01" step="0.01" required />
+            </div>
+            <div class="campo">
+            <label class="etiqueta" for="v-dev">Devaste (%)</label>
+            <input class="input" id="v-dev" name="devaste_pct" type="number" min="0" max="99" step="0.01" required />
+            </div>
+            <div class="campo">
+            <label class="etiqueta" for="v-precio">Precio por kg ($)</label>
+            <input class="input" id="v-precio" name="precio_kg" type="number" min="0" step="0.01" required />
+            </div>
+            <div class="campo" data-solo-via1>
+            <label class="etiqueta" for="v-iva">IVA (%)</label>
+            <input class="input" id="v-iva" name="iva_pct" type="number" min="0" max="50" step="0.01" />
+            </div>
+            <div class="campo col-span-2 sm:col-span-2">
+            <label class="etiqueta" for="v-comprador">Comprador</label>
+            <input class="input" id="v-comprador" name="comprador" maxlength="120" />
+            </div>
+        </div>
+
+        <div class="resumen-calculo">
+            <div><span>Kilo promedio por animal</span><strong data-c="prom">—</strong></div>
+            <div><span>Descuento por devaste</span><strong data-c="devkg">—</strong></div>
+            <div><span>Kilos netos</span><strong data-c="netos">—</strong></div>
+            <div data-solo-via1><span>Subtotal (sin IVA)</span><strong data-c="sub">—</strong></div>
+            <div data-solo-via1><span>IVA</span><strong data-c="iva">—</strong></div>
+            <div class="total"><span>Total final</span><strong data-c="total">—</strong></div>
+        </div>
+        <p class="ayuda" data-ayuda-stock></p>
+
+        <div class="campo">
+            <label class="etiqueta" for="v-notas">Notas</label>
+            <textarea class="input" id="v-notas" name="notas" rows="2"></textarea>
+        </div>
+        </Modal>
+    </Fragment>
+</AppLayout>
+
+<script>
+    import { supabase } from '../lib/supabase';
+    import { iniciarPagina } from '../lib/sesion';
+    import { anioActual, esc, fecha, hoyISO, kg, mesActual, nombreMesSolo, numero, pesos, precio, r2, rangoMes } from '../lib/formato';
+    import { aviso, avisoError, alAccion, botonAccion, conCarga, confirmar, eliminarFila, leerForm, llenarForm, modal, opcionesAnios, pestanas, renderTabla, tablaCargando, type Columna } from '../lib/ui';
+    import { CATEGORIAS } from '../lib/etiquetas';
+
+    const tVen = document.getElementById('t-ventas') as HTMLTableElement;
+    const tMen = document.getElementById('t-mensual') as HTMLTableElement;
+    const tAnu = document.getElementById('t-anual') as HTMLTableElement;
+    const inpMes = document.getElementById('mes') as HTMLInputElement;
+    const selAnio = document.getElementById('anio') as HTMLSelectElement;
+    inpMes.value = mesActual();
+
+    let ventas: any[] = [];
+    let resumen: any[] = [];
+    let stock: Record<string, number> = {};
+
+    const set = (k: string, v: string) => ((document.querySelector(`[data-k="${k}"]`) as HTMLElement).textContent = v);
+    const badgeVia = (v: number) => `<span class="badge ${v === 1 ? 'badge-info' : 'badge-alerta'}">Vía ${v}</span>`;
+
+    pestanas(document.getElementById('tabs')!, (p) => {
+        inpMes.hidden = p !== 'p-registros';
+        selAnio.hidden = p !== 'p-resumen';
+    });
+
+    /* -------- Registros -------- */
+    async function cargarVentas() {
+        tablaCargando(tVen, 8, 4);
+        const { desde, hasta } = rangoMes(inpMes.value || mesActual());
+        const { data, error } = await supabase.from('ventas').select('*').gte('fecha', desde).lte('fecha', hasta).order('fecha', { ascending: false }).order('id', { ascending: false });
+        if (error) return avisoError(error);
+        ventas = data ?? [];
+
+        const suma = (arr: any[], k: string) => arr.reduce((a, x) => a + Number(x[k]), 0);
+        const v1 = ventas.filter((v) => v.via === 1);
+        const v2 = ventas.filter((v) => v.via === 2);
+        set('v1', pesos(suma(v1, 'total')));
+        set('v1d', `${v1.length} operaciones · IVA ${pesos(suma(v1, 'iva'))}`);
+        set('v2', pesos(suma(v2, 'total')));
+        set('v2d', `${v2.length} operaciones`);
+        set('anim', String(suma(ventas, 'cantidad')));
+        set('animd', `${kg(suma(ventas, 'kilos_netos'), 0)} netos`);
+        const netos = suma(ventas, 'kilos_netos');
+        set('pkg', netos > 0 ? precio(suma(ventas, 'subtotal') / netos) : '—');
+
+        const col: Columna<any>[] = [
+        { titulo: 'Fecha', valor: (v) => fecha(v.fecha) },
+        { titulo: 'Vía', valor: (v) => badgeVia(v.via) },
+        { titulo: 'Categoría', valor: (v) => CATEGORIAS[v.categoria] },
+        { titulo: 'Cant.', valor: (v) => String(v.cantidad), clase: 'der' },
+        { titulo: 'Kilos', valor: (v) => kg(v.kilos), clase: 'der' },
+        { titulo: 'Kg prom.', valor: (v) => numero(v.kilo_promedio), clase: 'der' },
+        { titulo: 'Devaste', valor: (v) => `${numero(v.devaste_pct)} %`, clase: 'der' },
+        { titulo: 'Kg netos', valor: (v) => numero(v.kilos_netos), clase: 'der' },
+        { titulo: '$ / kg', valor: (v) => precio(v.precio_kg), clase: 'der' },
+        { titulo: 'Subtotal', valor: (v) => pesos(v.subtotal), clase: 'der' },
+        { titulo: 'IVA', valor: (v) => (v.via === 1 ? pesos(v.iva) : '—'), clase: 'der' },
+        { titulo: 'Total', valor: (v) => `<strong>${pesos(v.total)}</strong>`, clase: 'der' },
+        { titulo: 'Comprador', valor: (v) => esc(v.comprador ?? '—') },
+        { titulo: '', clase: 'acciones', valor: (v) => botonAccion('editar', v.id, 'pencil', 'Editar') + botonAccion('eliminar', v.id, 'trash', 'Eliminar') },
+        ];
+        renderTabla(tVen, col, ventas, {
+        vacio: 'No hay ventas registradas en este mes.',
+        pie: ['Total', '', '', String(suma(ventas, 'cantidad')), kg(suma(ventas, 'kilos')), '', '', numero(netos), '', pesos(suma(ventas, 'subtotal')), pesos(suma(ventas, 'iva')), pesos(suma(ventas, 'total')), '', ''],
+        });
+    }
+
+    /* -------- Resumen -------- */
+    async function cargarResumen() {
+        const { data, error } = await supabase.from('v_ventas_mensual').select('*').order('mes');
+        if (error) return avisoError(error);
+        resumen = data ?? [];
+        const anios = [...new Set(resumen.map((r) => Number(r.mes.slice(0, 4))))];
+        selAnio.innerHTML = opcionesAnios(anios, selAnio.value ? Number(selAnio.value) : anioActual());
+        renderMensual();
+        renderAnual();
+    }
+
+    function agrupar(filas: any[]) {
+        const v = (via: number, k: string) => filas.filter((r) => r.via === via).reduce((a, r) => a + Number(r[k]), 0);
+        return {
+        a1: v(1, 'animales'), k1: v(1, 'kilos_netos'), t1: v(1, 'total'), iva: v(1, 'iva'),
+        a2: v(2, 'animales'), k2: v(2, 'kilos_netos'), t2: v(2, 'total'),
+        };
+    }
+
+    const colResumen = (primera: Columna<any>): Columna<any>[] => [
+        primera,
+        { titulo: 'Vía 1 · animales', valor: (x) => String(x.a1), clase: 'der' },
+        { titulo: 'Vía 1 · kg netos', valor: (x) => numero(x.k1, 0), clase: 'der' },
+        { titulo: 'Vía 1 · total', valor: (x) => pesos(x.t1), clase: 'der' },
+        { titulo: 'Vía 2 · animales', valor: (x) => String(x.a2), clase: 'der' },
+        { titulo: 'Vía 2 · kg netos', valor: (x) => numero(x.k2, 0), clase: 'der' },
+        { titulo: 'Vía 2 · total', valor: (x) => pesos(x.t2), clase: 'der' },
+        { titulo: 'Total general', valor: (x) => `<strong>${pesos(x.t1 + x.t2)}</strong>`, clase: 'der' },
+    ];
+
+    function renderMensual() {
+        const anio = Number(selAnio.value);
+        const filasAnio = resumen.filter((r) => Number(r.mes.slice(0, 4)) === anio);
+        const meses = Array.from({ length: 12 }, (_, i) => ({ mes: i + 1, ...agrupar(filasAnio.filter((r) => Number(r.mes.slice(5, 7)) === i + 1)) })).filter(
+        (m) => m.a1 + m.a2 > 0 || m.t1 + m.t2 > 0
+        );
+        const t = agrupar(filasAnio);
+        renderTabla(tMen, colResumen({ titulo: 'Mes', valor: (x) => nombreMesSolo(x.mes) }), meses, {
+        vacio: `No hay ventas en ${anio}.`,
+        pie: [`Total ${anio}`, String(t.a1), numero(t.k1, 0), pesos(t.t1), String(t.a2), numero(t.k2, 0), pesos(t.t2), pesos(t.t1 + t.t2)],
+        });
+    }
+
+    function renderAnual() {
+        const anios = [...new Set(resumen.map((r) => Number(r.mes.slice(0, 4))))].sort((a, b) => b - a);
+        const filas = anios.map((a) => ({ anio: a, ...agrupar(resumen.filter((r) => Number(r.mes.slice(0, 4)) === a)) }));
+        renderTabla(tAnu, colResumen({ titulo: 'Año', valor: (x) => `<strong>${x.anio}</strong>` }), filas, { vacio: 'Todavía no hay ventas registradas.' });
+    }
+
+    inpMes.addEventListener('change', () => inpMes.value && cargarVentas());
+    selAnio.addEventListener('change', renderMensual);
+
+    /* -------- Formulario -------- */
+    const m = modal('m-venta');
+    const f = m.form;
+    const num = (n: string) => Number((f.elements.namedItem(n) as HTMLInputElement).value || 0);
+    const via = () => (f.querySelector('input[name="via"]:checked') as HTMLInputElement | null)?.value ?? '1';
+    const selCat = f.elements.namedItem('categoria') as HTMLSelectElement;
+
+    async function cargarStock() {
+        const { data, error } = await supabase.from('v_stock_resumen').select('*');
+        if (error) throw error;
+        stock = Object.fromEntries((data ?? []).map((r) => [r.categoria, r.animales]));
+    }
+
+    function opcionesCategoria(sel: string) {
+        selCat.innerHTML = Object.entries(CATEGORIAS)
+        .map(([k, t]) => {
+            const disp = k === 'descarte' ? '' : ` (${stock[k] ?? 0} en stock)`;
+            return `<option value="${k}"${k === sel ? ' selected' : ''}>${t}${disp}</option>`;
+        })
+        .join('');
+    }
+
+    function calcular() {
+        const esVia1 = via() === '1';
+        f.querySelectorAll<HTMLElement>('[data-solo-via1]').forEach((el) => (el.hidden = !esVia1));
+        (f.elements.namedItem('iva_pct') as HTMLInputElement).required = esVia1;
+        const cant = num('cantidad'), kilos = num('kilos'), dev = num('devaste_pct'), p = num('precio_kg');
+        const iva = esVia1 ? num('iva_pct') : 0;
+        const netos = r2(kilos * (1 - dev / 100));
+        const sub = r2(netos * p);
+        const ivaM = r2((sub * iva) / 100);
+        const c = (k: string, v: string) => ((f.querySelector(`[data-c="${k}"]`) as HTMLElement).textContent = v);
+        c('prom', cant > 0 && kilos > 0 ? kg(kilos / cant) : '—');
+        c('devkg', kilos > 0 ? kg(kilos - netos) : '—');
+        c('netos', kilos > 0 ? kg(netos) : '—');
+        c('sub', pesos(sub));
+        c('iva', pesos(ivaM));
+        c('total', pesos(sub + ivaM));
+        const cat = selCat.value;
+        (f.querySelector('[data-ayuda-stock]') as HTMLElement).textContent =
+        cat === 'descarte'
+            ? 'Las cerdas de descarte no descuentan stock de engorde. Recordá darlas de baja en su ficha.'
+            : `Se descontarán del stock los ${cat === 'capon' ? 'capones' : cat === 'cachorro' ? 'cachorros' : 'lechones'} de mayor edad primero.`;
+    }
+    f.addEventListener('input', calcular);
+    f.addEventListener('change', calcular);
+    f.querySelectorAll<HTMLInputElement>('input[name="via"]').forEach((r) =>
+        r.addEventListener('change', () => {
+        const iva = f.elements.namedItem('iva_pct') as HTMLInputElement;
+        if (r.value === '1' && !iva.value) iva.value = '10.5';
+        })
+    );
+
+    async function abrir(v?: any) {
+        try {
+        await cargarStock();
+        } catch (e) {
+        return avisoError(e);
+        }
+        f.reset();
+        opcionesCategoria(v?.categoria ?? 'capon');
+        if (v) {
+        llenarForm(f, { ...v, kilos: Number(v.kilos), devaste_pct: Number(v.devaste_pct), precio_kg: Number(v.precio_kg), iva_pct: v.via === 1 ? Number(v.iva_pct) : 10.5 });
+        } else {
+        llenarForm(f, { id: '', fecha: hoyISO(), devaste_pct: 3, iva_pct: 10.5 });
+        }
+        (f.querySelector(`input[name="via"][value="${v?.via ?? 1}"]`) as HTMLInputElement).checked = true;
+        calcular();
+        m.abrir(v ? 'Editar venta' : 'Nueva venta');
+    }
+
+    document.getElementById('btn-nueva')!.addEventListener('click', () => abrir());
+    alAccion(tVen, {
+        editar: (id) => abrir(ventas.find((x) => String(x.id) === id)),
+        eliminar: async (id) => {
+        if (!(await confirmar('¿Eliminar esta venta? Los animales vuelven al stock.', { boton: 'Eliminar' }))) return;
+        try {
+            await eliminarFila('ventas', id);
+            aviso('Venta eliminada');
+            cargar();
+        } catch (e) {
+            avisoError(e);
+        }
+        },
+    });
+
+    f.addEventListener('submit', (ev) => {
+        ev.preventDefault();
+        conCarga(f.querySelector('[data-guardar]'), async () => {
+        const d = leerForm(f);
+        const esVia1 = via() === '1';
+        const { error } = await supabase.rpc('guardar_venta', {
+            datos: {
+            id: d.id || null,
+            fecha: d.fecha,
+            via: Number(via()),
+            categoria: d.categoria,
+            cantidad: Number(d.cantidad),
+            kilos: Number(d.kilos),
+            devaste_pct: Number(d.devaste_pct),
+            precio_kg: Number(d.precio_kg),
+            iva_pct: esVia1 ? Number(d.iva_pct || 0) : 0,
+            comprador: d.comprador,
+            notas: d.notas,
+            },
+        });
+        if (error) return avisoError(error);
+        m.cerrar();
+        aviso(d.id ? 'Venta actualizada' : 'Venta registrada. El stock se actualizó.');
+        if (d.fecha.slice(0, 7) !== inpMes.value) inpMes.value = d.fecha.slice(0, 7);
+        cargar();
+        });
+    });
+
+    function cargar() {
+        cargarVentas();
+        cargarResumen();
+    }
+
+    iniciarPagina({ soloDueno: true }).then(cargar);
+</script>

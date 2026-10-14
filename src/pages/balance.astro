@@ -1,0 +1,159 @@
+---
+import AppLayout from '../layouts/AppLayout.astro';
+import Icon from '../components/Icon.astro';
+---
+<AppLayout titulo="Balance mensual" subtitulo="Ganancia o pérdida y rentabilidad del criadero">
+    <input slot="acciones" type="month" class="input w-auto" id="mes" aria-label="Mes" />
+    <button slot="acciones" type="button" class="btn" id="btn-imprimir"><Icon name="printer" /> Imprimir</button>
+
+    <p class="mb-4 hidden text-lg font-semibold print:block" id="titulo-impresion"></p>
+
+    <div class="mb-5 grid grid-cols-2 gap-3 lg:grid-cols-4">
+        <div class="tarjeta kpi"><span class="kpi-etiqueta">Ingresos (sin IVA)</span><span class="kpi-valor" data-k="ing">—</span><span class="kpi-detalle" data-k="ingd"></span></div>
+        <div class="tarjeta kpi"><span class="kpi-etiqueta">Egresos</span><span class="kpi-valor" data-k="egr">—</span><span class="kpi-detalle" data-k="egrd"></span></div>
+        <div class="tarjeta kpi"><span class="kpi-etiqueta">Resultado del mes</span><span class="kpi-valor" data-k="res">—</span><span class="kpi-detalle" data-k="resd"></span></div>
+        <div class="tarjeta kpi"><span class="kpi-etiqueta">Rentabilidad</span><span class="kpi-valor" data-k="rent">—</span><span class="kpi-detalle">Resultado ÷ egresos</span></div>
+    </div>
+
+    <div class="grid gap-5 lg:grid-cols-[1fr_20rem]">
+        <section class="tarjeta">
+        <div class="tarjeta-cabecera"><h2 class="tarjeta-titulo" id="titulo-balance">Detalle del mes</h2></div>
+        <div class="grid gap-6 p-4 sm:grid-cols-2">
+            <div>
+            <h3 class="mb-2 text-xs font-medium uppercase tracking-wider text-texto-3">Ingresos</h3>
+            <dl class="grid gap-1.5 text-sm" id="lista-ingresos"></dl>
+            </div>
+            <div>
+            <h3 class="mb-2 text-xs font-medium uppercase tracking-wider text-texto-3">Egresos</h3>
+            <dl class="grid gap-1.5 text-sm" id="lista-egresos"></dl>
+            </div>
+        </div>
+        <div class="flex items-center justify-between gap-4 border-t border-borde px-4 py-3.5">
+            <span class="font-semibold">Ganancia / pérdida</span>
+            <span class="num text-lg font-semibold" id="resultado-final">—</span>
+        </div>
+        </section>
+
+        <section class="tarjeta">
+        <div class="tarjeta-cabecera"><h2 class="tarjeta-titulo">Indicadores</h2></div>
+        <dl class="grid gap-3 p-4 text-sm" id="indicadores"></dl>
+        </section>
+    </div>
+
+    <section class="tarjeta mt-5">
+        <div class="tarjeta-cabecera"><h2 class="tarjeta-titulo" id="titulo-anual">Resumen del año</h2></div>
+        <div class="tabla-contenedor"><table class="tabla tabla-movil" id="t-anual"></table></div>
+    </section>
+</AppLayout>
+
+<script>
+    import { supabase } from '../lib/supabase';
+    import { iniciarPagina } from '../lib/sesion';
+    import { mesActual, nombreMes, nombreMesSolo, pesos, porcentaje, precio, kg } from '../lib/formato';
+    import { avisoError, renderTabla, tablaCargando, type Columna } from '../lib/ui';
+
+    const inpMes = document.getElementById('mes') as HTMLInputElement;
+    const tAnu = document.getElementById('t-anual') as HTMLTableElement;
+    inpMes.value = mesActual();
+
+    const EGRESOS: [string, string][] = [
+        ['alimento', 'Materia prima (núcleos y cereales)'],
+        ['medicamentos_alimento', 'Remedios / aditivos del alimento'],
+        ['mano_obra', 'Mano de obra'],
+        ['combustible', 'Combustible'],
+        ['veterinaria', 'Veterinaria y medicamentos'],
+        ['semen', 'Dosis de semen'],
+        ['extras', 'Extras (secuestrantes, leche materna, etc.)'],
+        ['otros', 'Otros gastos'],
+        ['reposicion', 'Compra de cerdas (reposición)'],
+    ];
+
+    const set = (k: string, v: string) => ((document.querySelector(`[data-k="${k}"]`) as HTMLElement).textContent = v);
+    const fila = (t: string, v: string, fuerte = false) =>
+        `<div class="flex justify-between gap-4 ${fuerte ? 'border-t border-borde pt-1.5 font-semibold' : ''}"><dt class="${fuerte ? '' : 'text-texto-2'}">${t}</dt><dd class="num text-right">${v}</dd></div>`;
+    const colorRes = (n: number) => (n > 0 ? 'text-ok' : n < 0 ? 'text-error' : '');
+    const vacio = (mes: string) => ({ mes, ventas_via1: 0, ventas_via2: 0, iva_ventas: 0, ingresos: 0, egresos: 0, ...Object.fromEntries(EGRESOS.map(([k]) => [k, 0])) });
+
+    async function cargar() {
+        const mes = inpMes.value || mesActual();
+        const anio = mes.slice(0, 4);
+        tablaCargando(tAnu, 5, 4);
+        const [b, v, mo] = await Promise.all([
+        supabase.from('v_balance_mensual').select('*').gte('mes', `${anio}-01-01`).lte('mes', `${anio}-12-01`).order('mes'),
+        supabase.from('v_ventas_mensual').select('*').gte('mes', `${anio}-01-01`).lte('mes', `${anio}-12-01`),
+        supabase.from('v_moliendas_mensual').select('*').eq('mes', `${mes}-01`),
+        ]);
+        if (b.error || v.error || mo.error) return avisoError(b.error || v.error || mo.error);
+        const filas = (b.data ?? []) as any[];
+        const ventasMes = (v.data ?? []).filter((r: any) => r.mes.startsWith(mes));
+        const r: any = filas.find((x) => x.mes.startsWith(mes)) ?? vacio(`${mes}-01`);
+        const n = (k: string) => Number(r[k] ?? 0);
+
+        const ingresos = n('ingresos');
+        const egresos = n('egresos');
+        const resultado = ingresos - egresos;
+        const rent = egresos > 0 ? (resultado / egresos) * 100 : null;
+        const margen = ingresos > 0 ? (resultado / ingresos) * 100 : null;
+        const kilosNetos = ventasMes.reduce((a: number, x: any) => a + Number(x.kilos_netos), 0);
+        const animales = ventasMes.reduce((a: number, x: any) => a + Number(x.animales), 0);
+        const kgAlimento = (mo.data ?? []).reduce((a: number, x: any) => a + Number(x.kilos), 0);
+        const costoAlimento = (mo.data ?? []).reduce((a: number, x: any) => a + Number(x.costo_total), 0);
+
+        document.getElementById('titulo-balance')!.textContent = `Detalle de ${nombreMes(mes)}`;
+        document.getElementById('titulo-impresion')!.textContent = `Balance de ${nombreMes(mes)}`;
+        document.getElementById('titulo-anual')!.textContent = `Resumen del año ${anio}`;
+
+        set('ing', pesos(ingresos));
+        set('ingd', `IVA cobrado aparte: ${pesos(n('iva_ventas'))}`);
+        set('egr', pesos(egresos));
+        set('egrd', `${EGRESOS.filter(([k]) => n(k) > 0).length} conceptos`);
+        const elRes = document.querySelector('[data-k="res"]') as HTMLElement;
+        elRes.textContent = pesos(resultado);
+        elRes.className = `kpi-valor ${colorRes(resultado)}`;
+        set('resd', resultado >= 0 ? 'Ganancia' : 'Pérdida');
+        set('rent', rent !== null ? porcentaje(rent) : '—');
+
+        document.getElementById('lista-ingresos')!.innerHTML =
+        fila('Ventas Vía 1 (neto sin IVA)', pesos(n('ventas_via1'))) +
+        fila('Ventas Vía 2', pesos(n('ventas_via2'))) +
+        fila('Total ingresos', pesos(ingresos), true) +
+        `<p class="mt-2 text-xs text-texto-3">El IVA de Vía 1 (${pesos(n('iva_ventas'))}) no se cuenta como ingreso.</p>`;
+
+        document.getElementById('lista-egresos')!.innerHTML = EGRESOS.map(([k, t]) => fila(t, pesos(n(k)))).join('') + fila('Total egresos', pesos(egresos), true);
+
+        const rf = document.getElementById('resultado-final')!;
+        rf.textContent = pesos(resultado);
+        rf.className = `num text-lg font-semibold ${colorRes(resultado)}`;
+
+        document.getElementById('indicadores')!.innerHTML =
+        fila('Margen sobre ventas', margen !== null ? porcentaje(margen) : '—') +
+        fila('Rentabilidad sobre costos', rent !== null ? porcentaje(rent) : '—') +
+        fila('Animales vendidos', String(animales)) +
+        fila('Kilos netos vendidos', kg(kilosNetos, 0)) +
+        fila('Costo total por kg vendido', kilosNetos > 0 ? precio(egresos / kilosNetos) : '—') +
+        fila('Ingreso promedio por kg', kilosNetos > 0 ? precio(ingresos / kilosNetos) : '—') +
+        fila('Alimento molido', kg(kgAlimento, 0)) +
+        fila('Costo del alimento por kg', kgAlimento > 0 ? precio(costoAlimento / kgAlimento) : '—');
+
+        // Año
+        const meses = filas.map((x) => ({ ...x, resultado: Number(x.ingresos) - Number(x.egresos) }));
+        const col: Columna<any>[] = [
+        { titulo: 'Mes', valor: (x) => nombreMesSolo(Number(x.mes.slice(5, 7))) },
+        { titulo: 'Ingresos', valor: (x) => pesos(x.ingresos), clase: 'der' },
+        { titulo: 'Egresos', valor: (x) => pesos(x.egresos), clase: 'der' },
+        { titulo: 'Resultado', valor: (x) => `<strong class="${colorRes(x.resultado)}">${pesos(x.resultado)}</strong>`, clase: 'der' },
+        { titulo: 'Rentabilidad', valor: (x) => (Number(x.egresos) > 0 ? porcentaje((x.resultado / Number(x.egresos)) * 100) : '—'), clase: 'der' },
+        ];
+        const ti = meses.reduce((a, x) => a + Number(x.ingresos), 0);
+        const te = meses.reduce((a, x) => a + Number(x.egresos), 0);
+        renderTabla(tAnu, col, meses, {
+        vacio: `No hay movimientos en ${anio}.`,
+        pie: [`Total ${anio}`, pesos(ti), pesos(te), `<span class="${colorRes(ti - te)}">${pesos(ti - te)}</span>`, te > 0 ? porcentaje(((ti - te) / te) * 100) : '—'],
+        });
+    }
+
+    inpMes.addEventListener('change', () => inpMes.value && cargar());
+    document.getElementById('btn-imprimir')!.addEventListener('click', () => window.print());
+
+    iniciarPagina({ soloDueno: true }).then(cargar);
+</script>

@@ -1,0 +1,186 @@
+---
+import '../styles/global.css';
+import Icon from '../components/Icon.astro';
+import type { NombreIcono } from '../lib/icons';
+
+interface Props {
+  titulo: string;
+  subtitulo?: string;
+}
+const { titulo, subtitulo } = Astro.props;
+const ruta = Astro.url.pathname.replace(/\/$/, '') || '/';
+
+interface Item { href: string; texto: string; icono: NombreIcono; dueno?: boolean }
+const grupos: { titulo: string; items: Item[]; dueno?: boolean }[] = [
+    { titulo: '', items: [{ href: '/', texto: 'Tablero', icono: 'layout-dashboard' }] },
+    {
+        titulo: 'Animales',
+        items: [
+        { href: '/cerdas', texto: 'Cerdas madres', icono: 'pig' },
+        { href: '/reproduccion', texto: 'Reproducción', icono: 'calendar-heart' },
+        { href: '/stock', texto: 'Stock de animales', icono: 'building-warehouse' },
+        ],
+    },
+    {
+        titulo: 'Alimento',
+        items: [
+        { href: '/compras', texto: 'Compras', icono: 'shopping-cart' },
+        { href: '/moliendas', texto: 'Moliendas', icono: 'grain' },
+        ],
+    },
+    {
+        titulo: 'Economía',
+        dueno: true,
+        items: [
+        { href: '/ventas', texto: 'Ventas', icono: 'cash-banknote' },
+        { href: '/gastos', texto: 'Gastos', icono: 'receipt-2' },
+        { href: '/balance', texto: 'Balance mensual', icono: 'report-money' },
+        ],
+    },
+];
+
+const activo = (href: string) => (href === '/' ? ruta === '/' : ruta === href || ruta.startsWith(href + '/'));
+---
+<!doctype html>
+<html lang="es-AR">
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+        <meta name="theme-color" content="#1f3d34" />
+        <meta name="robots" content="noindex, nofollow" />
+        <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+        <title>{titulo} · Criadero</title>
+    </head>
+    <body class="cargando">
+        <div data-app class="min-h-dvh md:pl-60">
+        <!-- Barra superior móvil -->
+        <header class="sticky top-0 z-30 flex h-14 items-center justify-between border-b border-borde bg-superficie px-4 md:hidden" data-no-imprimir>
+            <a href="/" class="flex items-center gap-2 font-semibold">
+            <span class="grid size-7 place-items-center rounded-md bg-marca text-white"><Icon name="pig" class="icon size-4" /></span>
+            Criadero
+            </a>
+            <button type="button" class="btn btn-icono" id="btn-menu" aria-label="Abrir menú" aria-controls="menu-lateral" aria-expanded="false">
+            <Icon name="menu-2" />
+            </button>
+        </header>
+
+        <!-- Menú lateral -->
+        <div id="menu-fondo" class="fixed inset-0 z-40 hidden bg-black/40 md:hidden" data-no-imprimir></div>
+        <aside
+            id="menu-lateral"
+            class="fixed inset-y-0 left-0 z-50 flex w-64 -translate-x-full flex-col border-r border-borde bg-superficie transition-transform duration-200 md:w-60 md:translate-x-0"
+            data-no-imprimir
+        >
+            <div class="flex h-14 items-center justify-between px-4 md:h-16">
+            <a href="/" class="flex items-center gap-2.5 font-semibold">
+                <span class="grid size-8 place-items-center rounded-lg bg-marca text-white"><Icon name="pig" class="icon size-[1.1rem]" /></span>
+                <span class="leading-tight">Criadero<span class="block text-xs font-normal text-texto-3">Sistema de gestión</span></span>
+            </a>
+            <button type="button" class="btn btn-icono md:hidden" id="btn-cerrar-menu" aria-label="Cerrar menú"><Icon name="x" /></button>
+            </div>
+
+            <nav class="flex-1 overflow-y-auto px-3 py-2" aria-label="Principal">
+            {grupos.map((g) => (
+                <div class="mb-3" {...(g.dueno ? { 'data-solo-dueno': '' } : {})}>
+                {g.titulo && <p class="px-2.5 pb-1 pt-2 text-[11px] font-medium uppercase tracking-wider text-texto-3">{g.titulo}</p>}
+                {g.items.map((it) => (
+                    <a
+                    href={it.href === '/' ? '/' : it.href + '/'}
+                    class:list={[
+                        'flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-[13.5px] font-medium transition-colors',
+                        activo(it.href) ? 'bg-marca-suave text-marca' : 'text-texto-2 hover:bg-fondo hover:text-texto',
+                    ]}
+                    aria-current={activo(it.href) ? 'page' : undefined}
+                    >
+                    <Icon name={it.icono} />
+                    {it.texto}
+                    </a>
+                ))}
+                </div>
+            ))}
+            </nav>
+
+            <div class="border-t border-borde p-3">
+            <a
+                href="/ajustes/"
+                class:list={[
+                'flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-[13.5px] font-medium',
+                activo('/ajustes') ? 'bg-marca-suave text-marca' : 'text-texto-2 hover:bg-fondo hover:text-texto',
+                ]}
+            >
+                <Icon name="settings" /> Ajustes
+            </a>
+            <div class="mt-2 flex items-center justify-between gap-2 rounded-lg px-2.5 py-1.5">
+                <div class="min-w-0">
+                <p class="truncate text-[13px] font-medium" data-usuario-nombre></p>
+                <p class="text-xs text-texto-3" data-usuario-rol></p>
+                </div>
+                <button type="button" class="btn btn-icono" id="btn-salir" title="Cerrar sesión" aria-label="Cerrar sesión"><Icon name="logout" /></button>
+            </div>
+            </div>
+        </aside>
+
+        <!-- Contenido -->
+        <main class="mx-auto w-full max-w-7xl px-4 pb-16 pt-5 sm:px-6 md:pt-8 lg:px-8">
+            <div class="mb-6 flex flex-wrap items-end justify-between gap-3">
+            <div class="min-w-0">
+                <h1 class="text-xl font-semibold tracking-tight sm:text-2xl">{titulo}</h1>
+                {subtitulo && <p class="mt-0.5 text-sm text-texto-2">{subtitulo}</p>}
+            </div>
+            <div class="flex flex-wrap items-center gap-2" data-no-imprimir>
+                <slot name="acciones" />
+            </div>
+            </div>
+            <slot />
+        </main>
+        </div>
+
+        <!-- Confirmación -->
+        <dialog id="dlg-confirmar" class="modal" style="max-width: 26rem">
+        <form method="dialog">
+            <div class="modal-cabecera"><h2 class="modal-titulo" data-titulo>Confirmar</h2></div>
+            <div class="modal-cuerpo"><p class="text-texto-2" data-texto></p></div>
+            <div class="modal-pie">
+            <button class="btn" value="cancelar">Cancelar</button>
+            <button class="btn btn-peligro" value="ok" data-ok>Confirmar</button>
+            </div>
+        </form>
+        </dialog>
+
+        <div id="toasts" class="pointer-events-none fixed bottom-4 right-4 z-[60] flex flex-col items-end gap-2 max-sm:left-4" aria-live="polite"></div>
+
+        <slot name="modales" />
+
+        <script>
+        import { cerrarSesion } from '../lib/sesion';
+
+        const menu = document.getElementById('menu-lateral')!;
+        const fondo = document.getElementById('menu-fondo')!;
+        const btnMenu = document.getElementById('btn-menu')!;
+        const abrirMenu = (abrir: boolean) => {
+            menu.classList.toggle('-translate-x-full', !abrir);
+            fondo.classList.toggle('hidden', !abrir);
+            btnMenu.setAttribute('aria-expanded', String(abrir));
+            document.documentElement.style.overflow = abrir ? 'hidden' : '';
+        };
+        btnMenu.addEventListener('click', () => abrirMenu(true));
+        fondo.addEventListener('click', () => abrirMenu(false));
+        document.getElementById('btn-cerrar-menu')!.addEventListener('click', () => abrirMenu(false));
+        window.matchMedia('(min-width: 768px)').addEventListener('change', () => abrirMenu(false));
+
+        document.getElementById('btn-salir')!.addEventListener('click', () => cerrarSesion());
+
+        // Botones para cerrar modales
+        document.addEventListener('click', (ev) => {
+            const b = (ev.target as HTMLElement).closest('[data-cerrar]');
+            if (b) (b.closest('dialog') as HTMLDialogElement | null)?.close();
+        });
+
+        // Evita que la rueda del mouse cambie los números sin querer
+        document.addEventListener('wheel', () => {
+            const el = document.activeElement as HTMLInputElement | null;
+            if (el?.type === 'number') el.blur();
+        }, { passive: true });
+        </script>
+    </body>
+</html>

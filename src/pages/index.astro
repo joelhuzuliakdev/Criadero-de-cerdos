@@ -1,0 +1,272 @@
+---
+import AppLayout from '../layouts/AppLayout.astro';
+import Icon from '../components/Icon.astro';
+---
+<AppLayout titulo="Tablero" subtitulo="Resumen del criadero para tomar decisiones">
+    <a slot="acciones" href="/reproduccion/" class="btn"><Icon name="calendar-heart" /> Reproducción</a>
+
+    <!-- Stock y plantel -->
+    <div class="mb-5 grid grid-cols-2 gap-3 lg:grid-cols-4">
+        <a href="/cerdas/" class="tarjeta kpi transition-colors hover:border-borde-fuerte"><span class="kpi-etiqueta"><Icon name="pig" class="icon size-4" /> Cerdas madres</span><span class="kpi-valor" data-k="madres">—</span><span class="kpi-detalle" data-k="madresd">&nbsp;</span></a>
+        <a href="/stock/" class="tarjeta kpi transition-colors hover:border-borde-fuerte"><span class="kpi-etiqueta">Lechones</span><span class="kpi-valor" data-k="lechon">—</span><span class="kpi-detalle">0 a 69 días</span></a>
+        <a href="/stock/" class="tarjeta kpi transition-colors hover:border-borde-fuerte"><span class="kpi-etiqueta">Cachorros</span><span class="kpi-valor" data-k="cachorro">—</span><span class="kpi-detalle">70 a 119 días</span></a>
+        <a href="/stock/" class="tarjeta kpi transition-colors hover:border-borde-fuerte"><span class="kpi-etiqueta">Capones</span><span class="kpi-valor" data-k="capon">—</span><span class="kpi-detalle">120 días o más</span></a>
+    </div>
+
+    <!-- Avisos -->
+    <section class="tarjeta mb-5">
+        <div class="tarjeta-cabecera">
+        <h2 class="tarjeta-titulo">Para hacer</h2>
+        <span class="text-xs text-texto-3" id="hoy"></span>
+        </div>
+        <div class="grid divide-y divide-borde md:grid-cols-3 md:divide-x md:divide-y-0" id="avisos">
+        <div class="p-4"><div class="esqueleto h-16"></div></div>
+        <div class="p-4"><div class="esqueleto h-16"></div></div>
+        <div class="p-4"><div class="esqueleto h-16"></div></div>
+        </div>
+    </section>
+
+    <!-- Economía (solo dueño) -->
+    <div data-solo-dueno>
+        <div class="mb-4 mt-8 flex flex-wrap items-center justify-between gap-3">
+        <h2 class="text-base font-semibold">Economía</h2>
+        <select class="input w-auto" id="anio" aria-label="Año"></select>
+        </div>
+
+        <div class="mb-5 grid grid-cols-2 gap-3 lg:grid-cols-4">
+        <div class="tarjeta kpi"><span class="kpi-etiqueta">Ventas del mes (sin IVA)</span><span class="kpi-valor" data-k="vmes">—</span><span class="kpi-detalle" data-k="vmesd">&nbsp;</span></div>
+        <div class="tarjeta kpi"><span class="kpi-etiqueta">Egresos del mes</span><span class="kpi-valor" data-k="emes">—</span><span class="kpi-detalle" data-k="emesd">&nbsp;</span></div>
+        <div class="tarjeta kpi"><span class="kpi-etiqueta">Resultado del mes</span><span class="kpi-valor" data-k="rmes">—</span><span class="kpi-detalle" data-k="rmesd">&nbsp;</span></div>
+        <div class="tarjeta kpi"><span class="kpi-etiqueta" data-k="ranioT">Resultado del año</span><span class="kpi-valor" data-k="ranio">—</span><span class="kpi-detalle" data-k="raniod">&nbsp;</span></div>
+        </div>
+
+        <div class="mb-5 grid gap-5 xl:grid-cols-2">
+        <section class="tarjeta min-w-0">
+            <div class="tarjeta-cabecera"><h3 class="tarjeta-titulo">Ingresos y egresos por mes</h3></div>
+            <div class="p-4" id="g-balance"></div>
+        </section>
+        <section class="tarjeta min-w-0">
+            <div class="tarjeta-cabecera"><h3 class="tarjeta-titulo">Ventas por vía</h3><span class="text-xs text-texto-3">Total cobrado</span></div>
+            <div class="p-4" id="g-vias"></div>
+        </section>
+        </div>
+
+        <section class="tarjeta">
+        <div class="tarjeta-cabecera">
+            <h3 class="tarjeta-titulo" id="titulo-comp">Comparativa anual</h3>
+            <a href="/balance/" class="enlace text-[13px]">Ver balance mensual</a>
+        </div>
+        <div class="tabla-contenedor"><table class="tabla" id="t-comp"></table></div>
+        </section>
+    </div>
+</AppLayout>
+
+<script>
+    import { supabase } from '../lib/supabase';
+    import { iniciarPagina } from '../lib/sesion';
+    import { anioActual, diasEntre, esc, fecha, hoyISO, kg, MESES_CORTOS, mesActual, mesAnterior, nombreMes, pesos, porcentaje, variacion } from '../lib/formato';
+    import { avisoError, opcionesAnios, renderTabla, tablaCargando, type Columna } from '../lib/ui';
+    import { DIAS_AVISO_DESTETE, DIAS_CONFIRMAR_PRENEZ } from '../lib/etiquetas';
+    import { graficoBarras, pesosCortos } from '../lib/grafico';
+
+    const set = (k: string, v: string) => ((document.querySelector(`[data-k="${k}"]`) as HTMLElement).textContent = v);
+    const selAnio = document.getElementById('anio') as HTMLSelectElement;
+    const COLOR_1 = '#2a78d6';
+    const COLOR_2 = '#eb6834';
+
+    /* ---------------- Operativo ---------------- */
+    function bloqueAviso(titulo: string, items: string[], vacio: string, href: string) {
+        return `<div class="p-4">
+        <div class="mb-2 flex items-center justify-between gap-2">
+            <p class="text-[13px] font-medium">${titulo}</p>
+            <span class="badge ${items.length ? 'badge-alerta' : 'badge-ok'}">${items.length}</span>
+        </div>
+        ${
+            items.length
+            ? `<ul class="grid gap-1.5 text-[13px]">${items.slice(0, 5).join('')}</ul>${items.length > 5 ? `<a href="${href}" class="enlace mt-2 inline-block text-xs">Ver ${items.length - 5} más</a>` : ''}`
+            : `<p class="text-[13px] text-texto-3">${vacio}</p>`
+        }
+        </div>`;
+    }
+    const item = (cerdaId: number, caravana: string, detalle: string) =>
+        `<li class="flex justify-between gap-3"><a class="enlace" href="/cerdas/ficha/?id=${cerdaId}">${esc(caravana)}</a><span class="text-texto-2">${detalle}</span></li>`;
+
+    async function cargarOperativo() {
+        const hoy = hoyISO();
+        document.getElementById('hoy')!.textContent = fecha(hoy);
+        const [st, ce, sv, pa] = await Promise.all([
+        supabase.from('v_stock_resumen').select('*'),
+        supabase.from('v_cerdas').select('id, estado, ultimo_resultado'),
+        supabase.from('servicios').select('id, cerda_id, fecha, fecha_probable_parto, resultado, cerdas!inner(caravana, estado)').in('resultado', ['pendiente', 'prenada']).eq('cerdas.estado', 'activa').order('fecha_probable_parto'),
+        supabase.from('partos').select('id, cerda_id, fecha, cerdas(caravana)').is('destetados', null).order('fecha'),
+        ]);
+        const err = st.error || ce.error || sv.error || pa.error;
+        if (err) return avisoError(err);
+
+        for (const r of st.data ?? []) set(r.categoria, String(r.animales));
+        const activas = (ce.data ?? []).filter((c) => c.estado === 'activa');
+        set('madres', String(activas.length));
+        set('madresd', `${activas.filter((c) => c.ultimo_resultado === 'prenada').length} preñadas confirmadas`);
+
+        const servicios = (sv.data ?? []) as any[];
+        const partos = (pa.data ?? []) as any[];
+        const proximos = servicios
+        .filter((s) => diasEntre(hoy, s.fecha_probable_parto) <= 7)
+        .map((s) => {
+            const d = diasEntre(hoy, s.fecha_probable_parto);
+            return item(s.cerda_id, s.cerdas.caravana, d < 0 ? `<span class="text-error">atrasado ${-d} d</span>` : d === 0 ? 'hoy' : `${fecha(s.fecha_probable_parto)}`);
+        });
+        const destetes = partos
+        .filter((p) => diasEntre(p.fecha, hoy) >= DIAS_AVISO_DESTETE)
+        .map((p) => item(p.cerda_id, p.cerdas.caravana, `${diasEntre(p.fecha, hoy)} días de lactancia`));
+        const confirmar = servicios
+        .filter((s) => s.resultado === 'pendiente' && diasEntre(s.fecha, hoy) >= DIAS_CONFIRMAR_PRENEZ)
+        .map((s) => item(s.cerda_id, s.cerdas.caravana, `servida hace ${diasEntre(s.fecha, hoy)} d`));
+
+        document.getElementById('avisos')!.innerHTML =
+        bloqueAviso('Partos en los próximos 7 días', proximos, 'No hay partos previstos esta semana.', '/reproduccion/') +
+        bloqueAviso('Destetes pendientes', destetes, `Ninguna camada supera los ${DIAS_AVISO_DESTETE} días sin destetar.`, '/reproduccion/') +
+        bloqueAviso('Confirmar preñez', confirmar, 'No hay servicios para revisar.', '/reproduccion/');
+    }
+
+    /* ---------------- Economía ---------------- */
+    let balance: any[] = [];
+    let ventas: any[] = [];
+    let moliendas: any[] = [];
+    const desconectar: (() => void)[] = [];
+
+    async function cargarEconomia() {
+        const [b, v, m] = await Promise.all([
+        supabase.from('v_balance_mensual').select('*').order('mes'),
+        supabase.from('v_ventas_mensual').select('*'),
+        supabase.from('v_moliendas_mensual').select('mes, kilos, costo_total'),
+        ]);
+        if (b.error || v.error || m.error) return avisoError(b.error || v.error || m.error);
+        balance = b.data ?? [];
+        ventas = v.data ?? [];
+        moliendas = m.data ?? [];
+        const anios = [...new Set(balance.map((r) => Number(r.mes.slice(0, 4))))];
+        selAnio.innerHTML = opcionesAnios(anios, anioActual());
+        renderEconomia();
+    }
+
+    const delMes = (arr: any[], mes: string) => arr.filter((r) => r.mes.startsWith(mes));
+    const delAnio = (arr: any[], anio: number) => arr.filter((r) => Number(r.mes.slice(0, 4)) === anio);
+    const suma = (arr: any[], k: string) => arr.reduce((a, r) => a + Number(r[k] ?? 0), 0);
+
+    function textoVar(actual: number, anterior: number, etiqueta: string, inverso = false) {
+        const v = variacion(actual, anterior);
+        if (v === null) return `Sin datos ${etiqueta}`;
+        const sube = v >= 0;
+        const bueno = inverso ? !sube : sube;
+        return `<span class="${bueno ? 'text-ok' : 'text-error'}">${sube ? '▲' : '▼'} ${porcentaje(Math.abs(v))}</span> ${etiqueta}`;
+    }
+    const setHtml = (k: string, v: string) => ((document.querySelector(`[data-k="${k}"]`) as HTMLElement).innerHTML = v);
+    const colorRes = (n: number) => `kpi-valor ${n > 0 ? 'text-ok' : n < 0 ? 'text-error' : ''}`;
+
+    function renderEconomia() {
+        const anio = Number(selAnio.value);
+        const esActual = anio === anioActual();
+        const mes = esActual ? mesActual() : `${anio}-12`;
+        const ant = mesAnterior(mes);
+
+        // KPIs del mes
+        const bm = delMes(balance, mes), ba = delMes(balance, ant);
+        const ingM = suma(bm, 'ingresos'), ingA = suma(ba, 'ingresos');
+        const egM = suma(bm, 'egresos'), egA = suma(ba, 'egresos');
+        set('vmes', pesos(ingM));
+        setHtml('vmesd', `${nombreMes(mes)} · ` + textoVar(ingM, ingA, 'vs mes anterior'));
+        set('emes', pesos(egM));
+        setHtml('emesd', textoVar(egM, egA, 'vs mes anterior', true));
+        const rM = ingM - egM;
+        const elR = document.querySelector('[data-k="rmes"]') as HTMLElement;
+        elR.textContent = pesos(rM);
+        elR.className = colorRes(rM);
+        set('rmesd', egM > 0 ? `Rentabilidad ${porcentaje((rM / egM) * 100)}` : 'Sin egresos cargados');
+
+        // Año
+        const bA = delAnio(balance, anio), bP = delAnio(balance, anio - 1);
+        const rA = suma(bA, 'ingresos') - suma(bA, 'egresos');
+        const rP = suma(bP, 'ingresos') - suma(bP, 'egresos');
+        set('ranioT', `Resultado ${anio}`);
+        const elA = document.querySelector('[data-k="ranio"]') as HTMLElement;
+        elA.textContent = pesos(rA);
+        elA.className = colorRes(rA);
+        setHtml('raniod', textoVar(rA, rP, `vs ${anio - 1}`));
+
+        // Gráficos
+        desconectar.splice(0).forEach((fn) => fn());
+        const porMes = (arr: any[], k: string, filtro?: (r: any) => boolean) =>
+        Array.from({ length: 12 }, (_, i) => suma(arr.filter((r) => Number(r.mes.slice(5, 7)) === i + 1 && (!filtro || filtro(r))), k));
+        desconectar.push(
+        graficoBarras(document.getElementById('g-balance')!, {
+            categorias: MESES_CORTOS,
+            series: [
+            { nombre: 'Ingresos (sin IVA)', color: COLOR_1, valores: porMes(bA, 'ingresos') },
+            { nombre: 'Egresos', color: COLOR_2, valores: porMes(bA, 'egresos') },
+            ],
+            formato: pesos,
+            formatoEje: pesosCortos,
+        })
+        );
+        const vA = delAnio(ventas, anio);
+        desconectar.push(
+        graficoBarras(document.getElementById('g-vias')!, {
+            categorias: MESES_CORTOS,
+            series: [
+            { nombre: 'Vía 1 (con IVA)', color: COLOR_1, valores: porMes(vA, 'total', (r) => r.via === 1) },
+            { nombre: 'Vía 2', color: COLOR_2, valores: porMes(vA, 'total', (r) => r.via === 2) },
+            ],
+            formato: pesos,
+            formatoEje: pesosCortos,
+        })
+        );
+
+        // Comparativa anual
+        document.getElementById('titulo-comp')!.textContent = `Comparativa ${anio} vs ${anio - 1}`;
+        const vP = delAnio(ventas, anio - 1);
+        const mA = delAnio(moliendas, anio), mP = delAnio(moliendas, anio - 1);
+        const gastos = (arr: any[]) => ['mano_obra', 'combustible', 'veterinaria', 'semen', 'extras', 'otros'].reduce((a, k) => a + suma(arr, k), 0);
+        const filas = [
+        { t: 'Ventas Vía 1 (total con IVA)', a: suma(vA.filter((r) => r.via === 1), 'total'), p: suma(vP.filter((r) => r.via === 1), 'total'), f: pesos },
+        { t: 'Ventas Vía 2', a: suma(vA.filter((r) => r.via === 2), 'total'), p: suma(vP.filter((r) => r.via === 2), 'total'), f: pesos },
+        { t: 'Animales vendidos', a: suma(vA, 'animales'), p: suma(vP, 'animales'), f: (n: number) => String(n) },
+        { t: 'Kilos netos vendidos', a: suma(vA, 'kilos_netos'), p: suma(vP, 'kilos_netos'), f: (n: number) => kg(n, 0) },
+        { t: 'Ingresos (sin IVA)', a: suma(bA, 'ingresos'), p: suma(bP, 'ingresos'), f: pesos, fuerte: true },
+        { t: 'Compras de materia prima', a: suma(bA, 'alimento') + suma(bA, 'medicamentos_alimento'), p: suma(bP, 'alimento') + suma(bP, 'medicamentos_alimento'), f: pesos, inv: true },
+        { t: 'Kilos de alimento molido', a: suma(mA, 'kilos'), p: suma(mP, 'kilos'), f: (n: number) => kg(n, 0), neutro: true },
+        { t: 'Costo de moliendas', a: suma(mA, 'costo_total'), p: suma(mP, 'costo_total'), f: pesos, inv: true },
+        { t: 'Gastos (mano de obra, veterinaria, etc.)', a: gastos(bA), p: gastos(bP), f: pesos, inv: true },
+        { t: 'Reposición de cerdas', a: suma(bA, 'reposicion'), p: suma(bP, 'reposicion'), f: pesos, inv: true },
+        { t: 'Egresos totales', a: suma(bA, 'egresos'), p: suma(bP, 'egresos'), f: pesos, inv: true, fuerte: true },
+        { t: 'Resultado', a: rA, p: rP, f: pesos, fuerte: true },
+        ];
+        const col: Columna<any>[] = [
+        { titulo: 'Concepto', valor: (x) => (x.fuerte ? `<strong>${x.t}</strong>` : x.t) },
+        { titulo: String(anio), valor: (x) => (x.fuerte ? `<strong>${x.f(x.a)}</strong>` : x.f(x.a)), clase: 'der' },
+        { titulo: String(anio - 1), valor: (x) => x.f(x.p), clase: 'der' },
+        {
+            titulo: 'Variación',
+            clase: 'der',
+            valor: (x) => {
+            const v = variacion(x.a, x.p);
+            if (v === null) return '—';
+            if (x.neutro) return porcentaje(v);
+            const bueno = x.inv ? v <= 0 : v >= 0;
+            return `<span class="${bueno ? 'text-ok' : 'text-error'}">${v >= 0 ? '+' : ''}${porcentaje(v)}</span>`;
+            },
+        },
+        ];
+        renderTabla(document.getElementById('t-comp') as HTMLTableElement, col, filas);
+    }
+
+    selAnio.addEventListener('change', renderEconomia);
+
+    iniciarPagina().then((p) => {
+        cargarOperativo();
+        if (p.rol === 'dueno') {
+        tablaCargando(document.getElementById('t-comp') as HTMLTableElement, 4, 6);
+        cargarEconomia();
+        }
+    });
+</script>

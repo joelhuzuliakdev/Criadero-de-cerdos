@@ -1,0 +1,268 @@
+---
+import AppLayout from '../layouts/AppLayout.astro';
+import Modal from '../components/Modal.astro';
+import Icon from '../components/Icon.astro';
+---
+<AppLayout titulo="Compras" subtitulo="Materia prima (núcleos y cereales) y remedios para el alimento">
+    <button slot="acciones" type="button" class="btn btn-primario" id="btn-nueva"><Icon name="plus" /> Nueva compra</button>
+
+    <div class="mb-4 flex flex-wrap items-center justify-between gap-3">
+        <div class="pestanas" role="tablist" id="tabs">
+        <button class="pestana" role="tab" aria-selected="true" data-panel="p-compras">Compras del mes</button>
+        <button class="pestana" role="tab" aria-selected="false" data-panel="p-stock">Stock de insumos</button>
+        </div>
+        <input type="month" class="input w-auto" id="mes" aria-label="Mes" />
+    </div>
+
+    <div id="p-compras">
+        <div class="mb-4 grid grid-cols-2 gap-3 lg:grid-cols-4">
+        <div class="tarjeta kpi"><span class="kpi-etiqueta">Total del mes</span><span class="kpi-valor" data-k="total">—</span></div>
+        <div class="tarjeta kpi"><span class="kpi-etiqueta">Núcleos</span><span class="kpi-valor" data-k="nucleo">—</span></div>
+        <div class="tarjeta kpi"><span class="kpi-etiqueta">Cereales</span><span class="kpi-valor" data-k="cereal">—</span></div>
+        <div class="tarjeta kpi"><span class="kpi-etiqueta">Remedios y otros</span><span class="kpi-valor" data-k="otros">—</span></div>
+        </div>
+        <section class="tarjeta">
+        <div class="tabla-contenedor"><table class="tabla tabla-movil" id="t-compras"></table></div>
+        </section>
+    </div>
+
+    <section id="p-stock" class="tarjeta" hidden>
+        <div class="tarjeta-cabecera">
+        <h2 class="tarjeta-titulo">Stock estimado de insumos</h2>
+        <span class="text-xs text-texto-3">Comprado − usado en moliendas</span>
+        </div>
+        <div class="tabla-contenedor"><table class="tabla tabla-movil" id="t-stock"></table></div>
+    </section>
+
+    <Fragment slot="modales">
+        <Modal id="m-compra" titulo="Nueva compra">
+        <input type="hidden" name="id" />
+        <div class="grid grid-cols-2 gap-3">
+            <div class="campo">
+            <label class="etiqueta" for="co-fecha">Fecha</label>
+            <input class="input" id="co-fecha" name="fecha" type="date" required />
+            </div>
+            <div class="campo">
+            <label class="etiqueta" for="co-insumo">Insumo</label>
+            <select class="input" id="co-insumo" name="insumo_id" required></select>
+            </div>
+        </div>
+        <div class="grid grid-cols-3 gap-3">
+            <div class="campo">
+            <label class="etiqueta" for="co-cant">Cantidad (<span data-unidad>kg</span>)</label>
+            <input class="input" id="co-cant" name="cantidad" type="number" min="0.01" step="0.01" required />
+            </div>
+            <div class="campo">
+            <label class="etiqueta" for="co-precio">Precio por <span data-unidad>kg</span></label>
+            <input class="input" id="co-precio" name="precio_unitario" type="number" min="0" step="0.0001" required />
+            </div>
+            <div class="campo">
+            <label class="etiqueta" for="co-total">Total ($)</label>
+            <input class="input" id="co-total" name="total" type="number" min="0" step="0.01" />
+            </div>
+        </div>
+        <p class="ayuda -mt-2">Podés cargar el precio unitario o el total pagado: el otro se calcula solo.</p>
+        <div class="campo">
+            <label class="etiqueta" for="co-prov">Proveedor</label>
+            <input class="input" id="co-prov" name="proveedor" maxlength="120" />
+        </div>
+        <div class="campo">
+            <label class="etiqueta" for="co-notas">Notas</label>
+            <textarea class="input" id="co-notas" name="notas" rows="2"></textarea>
+        </div>
+        </Modal>
+    </Fragment>
+</AppLayout>
+
+<script>
+    import { supabase } from '../lib/supabase';
+    import { iniciarPagina } from '../lib/sesion';
+    import { esc, fecha, hoyISO, kg, mesActual, numero, pesos, precio, r2, rangoMes } from '../lib/formato';
+    import { aviso, avisoError, alAccion, botonAccion, conCarga, confirmar, eliminarFila, guardarFila, leerForm, llenarForm, modal, pestanas, renderTabla, tablaCargando, textoONull, type Columna } from '../lib/ui';
+    import { TIPOS_INSUMO, UNIDADES } from '../lib/etiquetas';
+
+    const tCompras = document.getElementById('t-compras') as HTMLTableElement;
+    const tStock = document.getElementById('t-stock') as HTMLTableElement;
+    const inpMes = document.getElementById('mes') as HTMLInputElement;
+    inpMes.value = mesActual();
+
+    let insumos: any[] = [];
+    let compras: any[] = [];
+
+    pestanas(document.getElementById('tabs')!, (p) => (inpMes.hidden = p !== 'p-compras'));
+
+    const unidad = (u: string) => UNIDADES[u] ?? u;
+    const set = (k: string, v: string) => ((document.querySelector(`[data-k="${k}"]`) as HTMLElement).textContent = v);
+
+    async function cargarInsumos() {
+        const { data, error } = await supabase.from('v_insumos').select('*').order('tipo').order('nombre');
+        if (error) throw error;
+        insumos = data ?? [];
+        const col: Columna<any>[] = [
+        { titulo: 'Insumo', valor: (i) => esc(i.nombre) + (i.activo ? '' : ' <span class="badge">Inactivo</span>') },
+        { titulo: 'Tipo', valor: (i) => TIPOS_INSUMO[i.tipo] },
+        {
+            titulo: 'Stock',
+            clase: 'der',
+            valor: (i) => {
+            const txt = `${numero(i.stock)} ${unidad(i.unidad)}`;
+            return Number(i.stock) < 0 ? `<span class="text-error" title="Se usó más de lo comprado">${txt}</span>` : txt;
+            },
+        },
+        { titulo: 'Último precio', valor: (i) => (i.ultimo_precio !== null ? `${precio(i.ultimo_precio)} / ${unidad(i.unidad)}` : '—'), clase: 'der' },
+        { titulo: 'Última compra', valor: (i) => fecha(i.ultima_compra), clase: 'der' },
+        ];
+        renderTabla(tStock, col, insumos, { vacio: 'No hay insumos cargados. Agregalos en Ajustes.' });
+    }
+
+    async function cargarCompras() {
+        tablaCargando(tCompras, 6, 4);
+        const { desde, hasta } = rangoMes(inpMes.value || mesActual());
+        const { data, error } = await supabase
+        .from('compras')
+        .select('*, insumos(nombre, tipo, unidad)')
+        .gte('fecha', desde)
+        .lte('fecha', hasta)
+        .order('fecha', { ascending: false })
+        .order('id', { ascending: false });
+        if (error) return avisoError(error);
+        compras = data ?? [];
+
+        const porTipo = (t: string[]) => compras.filter((c) => t.includes(c.insumos.tipo)).reduce((a, c) => a + Number(c.total), 0);
+        const total = compras.reduce((a, c) => a + Number(c.total), 0);
+        set('total', pesos(total));
+        set('nucleo', pesos(porTipo(['nucleo'])));
+        set('cereal', pesos(porTipo(['cereal'])));
+        set('otros', pesos(porTipo(['medicamento', 'otro'])));
+
+        const col: Columna<any>[] = [
+        { titulo: 'Fecha', valor: (c) => fecha(c.fecha) },
+        { titulo: 'Insumo', valor: (c) => esc(c.insumos.nombre) },
+        { titulo: 'Tipo', valor: (c) => `<span class="badge">${TIPOS_INSUMO[c.insumos.tipo]}</span>` },
+        { titulo: 'Cantidad', valor: (c) => (c.insumos.unidad === 'kg' ? kg(c.cantidad) : `${numero(c.cantidad)} ${unidad(c.insumos.unidad)}`), clase: 'der' },
+        { titulo: 'Precio unit.', valor: (c) => precio(c.precio_unitario), clase: 'der' },
+        { titulo: 'Total', valor: (c) => `<strong>${pesos(c.total)}</strong>`, clase: 'der' },
+        { titulo: 'Proveedor', valor: (c) => esc(c.proveedor ?? '—') },
+        { titulo: '', clase: 'acciones', valor: (c) => botonAccion('editar', c.id, 'pencil', 'Editar') + botonAccion('eliminar', c.id, 'trash', 'Eliminar') },
+        ];
+        renderTabla(tCompras, col, compras, {
+        vacio: 'No hay compras registradas en este mes.',
+        pie: ['Total', '', '', '', '', pesos(total), '', ''],
+        });
+    }
+
+    async function cargar() {
+        try {
+        await cargarInsumos();
+        } catch (e) {
+        avisoError(e);
+        }
+        await cargarCompras();
+    }
+
+    inpMes.addEventListener('change', () => inpMes.value && cargarCompras());
+
+    // Formulario
+    const m = modal('m-compra');
+    const f = m.form;
+    const selInsumo = f.elements.namedItem('insumo_id') as HTMLSelectElement;
+    const inpCant = f.elements.namedItem('cantidad') as HTMLInputElement;
+    const inpPrecio = f.elements.namedItem('precio_unitario') as HTMLInputElement;
+    const inpTotal = f.elements.namedItem('total') as HTMLInputElement;
+
+    function opcionesInsumos(incluirId?: number) {
+        const grupos = Object.entries(TIPOS_INSUMO)
+        .map(([t, nombre]) => {
+            const items = insumos.filter((i) => i.tipo === t && (i.activo || i.id === incluirId));
+            if (!items.length) return '';
+            return `<optgroup label="${nombre}">${items.map((i) => `<option value="${i.id}">${esc(i.nombre)}</option>`).join('')}</optgroup>`;
+        })
+        .join('');
+        selInsumo.innerHTML = '<option value="">Elegí un insumo…</option>' + grupos;
+    }
+
+    function actualizarUnidad() {
+        const i = insumos.find((x) => String(x.id) === selInsumo.value);
+        f.querySelectorAll('[data-unidad]').forEach((el) => (el.textContent = i ? (i.unidad === 'kg' ? 'kg' : unidad(i.unidad)) : 'kg'));
+    }
+
+    selInsumo.addEventListener('change', () => {
+        actualizarUnidad();
+        const i = insumos.find((x) => String(x.id) === selInsumo.value);
+        if (i?.ultimo_precio && !inpPrecio.value) {
+        inpPrecio.value = String(Number(i.ultimo_precio));
+        calcTotal();
+        }
+    });
+    const calcTotal = () => {
+        const c = Number(inpCant.value), p = Number(inpPrecio.value);
+        inpTotal.value = inpCant.value && inpPrecio.value ? String(r2(c * p)) : '';
+    };
+    const calcPrecio = () => {
+        const c = Number(inpCant.value), t = Number(inpTotal.value);
+        if (c > 0 && inpTotal.value) inpPrecio.value = String(Math.round((t / c) * 10000) / 10000);
+    };
+    inpCant.addEventListener('input', () => (inpPrecio.value ? calcTotal() : calcPrecio()));
+    inpPrecio.addEventListener('input', calcTotal);
+    inpTotal.addEventListener('input', calcPrecio);
+
+    document.getElementById('btn-nueva')!.addEventListener('click', () => {
+        f.reset();
+        opcionesInsumos();
+        (f.elements.namedItem('fecha') as HTMLInputElement).value = hoyISO();
+        actualizarUnidad();
+        m.abrir('Nueva compra');
+    });
+
+    alAccion(tCompras, {
+        editar: (id) => {
+        const c = compras.find((x) => String(x.id) === id);
+        if (!c) return;
+        f.reset();
+        opcionesInsumos(c.insumo_id);
+        llenarForm(f, { ...c, precio_unitario: Number(c.precio_unitario), total: Number(c.total) });
+        actualizarUnidad();
+        m.abrir('Editar compra');
+        },
+        eliminar: async (id) => {
+        if (!(await confirmar('¿Eliminar esta compra?', { boton: 'Eliminar' }))) return;
+        try {
+            await eliminarFila('compras', id);
+            aviso('Compra eliminada');
+            cargar();
+        } catch (e) {
+            avisoError(e);
+        }
+        },
+    });
+
+    f.addEventListener('submit', (ev) => {
+        ev.preventDefault();
+        conCarga(f.querySelector('[data-guardar]'), async () => {
+        const d = leerForm(f);
+        try {
+            await guardarFila(
+            'compras',
+            {
+                fecha: d.fecha,
+                insumo_id: Number(d.insumo_id),
+                cantidad: Number(d.cantidad),
+                precio_unitario: Number(d.precio_unitario),
+                proveedor: textoONull(d.proveedor),
+                notas: textoONull(d.notas),
+            },
+            d.id || null
+            );
+            m.cerrar();
+            aviso(d.id ? 'Compra actualizada' : 'Compra registrada');
+            // Si la compra es de otro mes, mostrar ese mes
+            if (d.fecha.slice(0, 7) !== inpMes.value) inpMes.value = d.fecha.slice(0, 7);
+            cargar();
+        } catch (e) {
+            avisoError(e);
+        }
+        });
+    });
+
+    iniciarPagina().then(cargar);
+</script>

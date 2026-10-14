@@ -1,0 +1,450 @@
+---
+import AppLayout from '../layouts/AppLayout.astro';
+import Icon from '../components/Icon.astro';
+---
+<AppLayout titulo="Moliendas" subtitulo="Preparación de alimento con costo por kilo congelado al día de la molienda">
+    <button slot="acciones" type="button" class="btn btn-primario" id="btn-nueva"><Icon name="plus" /> Nueva molienda</button>
+
+    <div class="mb-4 flex flex-wrap items-center justify-between gap-3">
+        <div class="pestanas" role="tablist" id="tabs">
+        <button class="pestana" role="tab" aria-selected="true" data-panel="p-registros">Registros</button>
+        <button class="pestana" role="tab" aria-selected="false" data-panel="p-mensual">Resumen mensual</button>
+        <button class="pestana" role="tab" aria-selected="false" data-panel="p-anual">Resumen anual</button>
+        </div>
+        <div class="flex gap-2">
+        <input type="month" class="input w-auto" id="mes" aria-label="Mes" />
+        <select class="input w-auto" id="anio" aria-label="Año" hidden></select>
+        </div>
+    </div>
+
+    <!-- Registros del mes -->
+    <div id="p-registros">
+        <div class="mb-4 grid grid-cols-2 gap-3 lg:grid-cols-4">
+        <div class="tarjeta kpi"><span class="kpi-etiqueta">Moliendas</span><span class="kpi-valor" data-k="cant">—</span></div>
+        <div class="tarjeta kpi"><span class="kpi-etiqueta">Kilos producidos</span><span class="kpi-valor" data-k="kilos">—</span></div>
+        <div class="tarjeta kpi"><span class="kpi-etiqueta">Costo total</span><span class="kpi-valor" data-k="costo">—</span></div>
+        <div class="tarjeta kpi"><span class="kpi-etiqueta">Costo promedio por kg</span><span class="kpi-valor" data-k="costokg">—</span></div>
+        </div>
+        <section class="tarjeta">
+        <div class="tabla-contenedor"><table class="tabla tabla-movil" id="t-registros"></table></div>
+        </section>
+    </div>
+
+    <!-- Resumen mensual -->
+    <div id="p-mensual" class="grid gap-5" hidden>
+        <section class="tarjeta">
+        <div class="tarjeta-cabecera"><h2 class="tarjeta-titulo">Mes por mes</h2></div>
+        <div class="tabla-contenedor"><table class="tabla tabla-movil" id="t-mensual"></table></div>
+        </section>
+        <section class="tarjeta">
+        <div class="tarjeta-cabecera"><h2 class="tarjeta-titulo">Por preparación en el año</h2></div>
+        <div class="tabla-contenedor"><table class="tabla tabla-movil" id="t-prep"></table></div>
+        </section>
+    </div>
+
+    <!-- Resumen anual -->
+    <section id="p-anual" class="tarjeta" hidden>
+        <div class="tarjeta-cabecera"><h2 class="tarjeta-titulo">Comparativa anual</h2></div>
+        <div class="tabla-contenedor"><table class="tabla tabla-movil" id="t-anual"></table></div>
+    </section>
+
+    <Fragment slot="modales">
+        <dialog id="m-molienda" class="modal modal-ancho" aria-labelledby="m-molienda-titulo">
+        <form autocomplete="off">
+            <div class="modal-cabecera">
+            <h2 class="modal-titulo" id="m-molienda-titulo" data-modal-titulo>Nueva molienda</h2>
+            <button type="button" class="btn btn-icono" data-cerrar aria-label="Cerrar"><Icon name="x" /></button>
+            </div>
+            <div class="modal-cuerpo">
+            <input type="hidden" name="id" />
+            <div class="grid grid-cols-2 gap-3">
+                <div class="campo">
+                <label class="etiqueta" for="mo-fecha">Fecha</label>
+                <input class="input" id="mo-fecha" name="fecha" type="date" required />
+                </div>
+                <div class="campo">
+                <label class="etiqueta" for="mo-prep">Preparación</label>
+                <select class="input" id="mo-prep" name="preparacion" required></select>
+                </div>
+            </div>
+
+            <div class="grid gap-2">
+                <div class="flex flex-wrap items-center justify-between gap-2">
+                <span class="etiqueta">Ingredientes</span>
+                <button type="button" class="btn btn-sm btn-fantasma" id="btn-receta">Usar última receta de esta preparación</button>
+                </div>
+                <div class="hidden grid-cols-[1fr_7rem_8rem_7rem_2.125rem] gap-2 px-0.5 text-xs text-texto-3 sm:grid">
+                <span>Insumo</span><span>Kilos</span><span>Precio por kg</span><span class="text-right">Subtotal</span><span></span>
+                </div>
+                <div id="items" class="grid gap-3 sm:gap-2"></div>
+                <button type="button" class="btn btn-sm justify-self-start" id="btn-item"><Icon name="plus" class="icon size-4" /> Agregar ingrediente</button>
+                <p class="ayuda">El precio por kg se completa con la última compra, pero podés modificarlo. Queda guardado («congelado») con esta molienda.</p>
+            </div>
+
+            <div class="resumen-calculo">
+                <div><span>Kilos totales</span><strong data-t-kilos>0 kg</strong></div>
+                <div><span>Costo total</span><strong data-t-costo>$ 0</strong></div>
+                <div class="total"><span>Costo por kilo</span><strong data-t-costokg>$ 0,00</strong></div>
+            </div>
+
+            <div class="campo">
+                <label class="etiqueta" for="mo-notas">Notas</label>
+                <textarea class="input" id="mo-notas" name="notas" rows="2"></textarea>
+            </div>
+            </div>
+            <div class="modal-pie">
+            <button type="button" class="btn" data-cerrar>Cancelar</button>
+            <button type="submit" class="btn btn-primario" data-guardar>Guardar</button>
+            </div>
+        </form>
+        </dialog>
+    </Fragment>
+</AppLayout>
+
+<script>
+    import { supabase } from '../lib/supabase';
+    import { iniciarPagina } from '../lib/sesion';
+    import { anioActual, esc, fecha, hoyISO, kg, mesActual, nombreMesSolo, numero, pesos, precio, r2, rangoMes } from '../lib/formato';
+    import { aviso, avisoError, alAccion, botonAccion, conCarga, confirmar, eliminarFila, leerForm, modal, opcionesAnios, pestanas, renderTabla, tablaCargando, type Columna } from '../lib/ui';
+    import { PREPARACIONES, TIPOS_INSUMO, opciones } from '../lib/etiquetas';
+    import { icono } from '../lib/icons';
+
+    const tReg = document.getElementById('t-registros') as HTMLTableElement;
+    const tMen = document.getElementById('t-mensual') as HTMLTableElement;
+    const tPrep = document.getElementById('t-prep') as HTMLTableElement;
+    const tAnu = document.getElementById('t-anual') as HTMLTableElement;
+    const inpMes = document.getElementById('mes') as HTMLInputElement;
+    const selAnio = document.getElementById('anio') as HTMLSelectElement;
+    inpMes.value = mesActual();
+
+    let insumos: any[] = [];
+    let moliendas: any[] = [];
+    let resumen: any[] = [];
+
+    const set = (k: string, v: string) => ((document.querySelector(`[data-k="${k}"]`) as HTMLElement).textContent = v);
+    const costoKg = (costo: number, kilos: number) => (kilos > 0 ? costo / kilos : 0);
+
+    pestanas(document.getElementById('tabs')!, (p) => {
+        inpMes.hidden = p !== 'p-registros';
+        selAnio.hidden = p !== 'p-mensual';
+    });
+
+    /* ---------------- Registros ---------------- */
+    async function cargarRegistros() {
+        tablaCargando(tReg, 5, 4);
+        const { desde, hasta } = rangoMes(inpMes.value || mesActual());
+        const { data, error } = await supabase
+        .from('moliendas')
+        .select('*')
+        .gte('fecha', desde)
+        .lte('fecha', hasta)
+        .order('fecha', { ascending: false })
+        .order('id', { ascending: false });
+        if (error) return avisoError(error);
+        moliendas = data ?? [];
+        const kilos = moliendas.reduce((a, x) => a + Number(x.kilos_totales), 0);
+        const costo = moliendas.reduce((a, x) => a + Number(x.costo_total), 0);
+        set('cant', String(moliendas.length));
+        set('kilos', kg(kilos, 0));
+        set('costo', pesos(costo));
+        set('costokg', precio(costoKg(costo, kilos)));
+
+        const col: Columna<any>[] = [
+        { titulo: 'Fecha', valor: (x) => fecha(x.fecha) },
+        { titulo: 'Preparación', valor: (x) => `<span class="badge badge-marca">${PREPARACIONES[x.preparacion]}</span>` },
+        { titulo: 'Kilos', valor: (x) => kg(x.kilos_totales), clase: 'der' },
+        { titulo: 'Costo total', valor: (x) => pesos(x.costo_total), clase: 'der' },
+        { titulo: 'Costo por kg', valor: (x) => `<strong>${precio(x.costo_kg)}</strong>`, clase: 'der' },
+        { titulo: 'Notas', valor: (x) => esc(x.notas ?? '') },
+        { titulo: '', clase: 'acciones', valor: (x) => botonAccion('editar', x.id, 'pencil', 'Ver / editar') + botonAccion('eliminar', x.id, 'trash', 'Eliminar') },
+        ];
+        renderTabla(tReg, col, moliendas, {
+        vacio: 'No hay moliendas registradas en este mes.',
+        pie: ['Total', '', kg(kilos), pesos(costo), precio(costoKg(costo, kilos)), '', ''],
+        });
+    }
+
+    /* ---------------- Resúmenes ---------------- */
+    async function cargarResumen() {
+        const { data, error } = await supabase.from('v_moliendas_mensual').select('*').order('mes');
+        if (error) return avisoError(error);
+        resumen = data ?? [];
+        const anios = [...new Set(resumen.map((r) => Number(r.mes.slice(0, 4))))];
+        const actual = selAnio.value ? Number(selAnio.value) : anioActual();
+        selAnio.innerHTML = opcionesAnios(anios, actual);
+        renderMensual();
+        renderAnual();
+    }
+
+    function renderMensual() {
+        const anio = Number(selAnio.value);
+        const filas = resumen.filter((r) => Number(r.mes.slice(0, 4)) === anio);
+        const porMes = Array.from({ length: 12 }, (_, i) => {
+        const rs = filas.filter((r) => Number(r.mes.slice(5, 7)) === i + 1);
+        return {
+            mes: i + 1,
+            moliendas: rs.reduce((a, r) => a + r.moliendas, 0),
+            kilos: rs.reduce((a, r) => a + Number(r.kilos), 0),
+            costo: rs.reduce((a, r) => a + Number(r.costo_total), 0),
+        };
+        }).filter((m) => m.moliendas > 0);
+        const tk = porMes.reduce((a, m) => a + m.kilos, 0);
+        const tc = porMes.reduce((a, m) => a + m.costo, 0);
+        const tm = porMes.reduce((a, m) => a + m.moliendas, 0);
+        renderTabla(
+        tMen,
+        [
+            { titulo: 'Mes', valor: (m: any) => nombreMesSolo(m.mes) },
+            { titulo: 'Moliendas', valor: (m: any) => String(m.moliendas), clase: 'der' },
+            { titulo: 'Kilos', valor: (m: any) => kg(m.kilos, 0), clase: 'der' },
+            { titulo: 'Costo total', valor: (m: any) => pesos(m.costo), clase: 'der' },
+            { titulo: 'Costo por kg', valor: (m: any) => precio(costoKg(m.costo, m.kilos)), clase: 'der' },
+        ],
+        porMes,
+        { vacio: `No hay moliendas en ${anio}.`, pie: [`Total ${anio}`, String(tm), kg(tk, 0), pesos(tc), precio(costoKg(tc, tk))] }
+        );
+
+        const porPrep = Object.keys(PREPARACIONES)
+        .map((p) => {
+            const rs = filas.filter((r) => r.preparacion === p);
+            return {
+            prep: p,
+            moliendas: rs.reduce((a, r) => a + r.moliendas, 0),
+            kilos: rs.reduce((a, r) => a + Number(r.kilos), 0),
+            costo: rs.reduce((a, r) => a + Number(r.costo_total), 0),
+            };
+        })
+        .filter((x) => x.moliendas > 0);
+        renderTabla(
+        tPrep,
+        [
+            { titulo: 'Preparación', valor: (x: any) => PREPARACIONES[x.prep] },
+            { titulo: 'Moliendas', valor: (x: any) => String(x.moliendas), clase: 'der' },
+            { titulo: 'Kilos', valor: (x: any) => kg(x.kilos, 0), clase: 'der' },
+            { titulo: '% del total', valor: (x: any) => (tk > 0 ? `${numero((x.kilos / tk) * 100, 1)} %` : '—'), clase: 'der' },
+            { titulo: 'Costo total', valor: (x: any) => pesos(x.costo), clase: 'der' },
+            { titulo: 'Costo por kg', valor: (x: any) => precio(costoKg(x.costo, x.kilos)), clase: 'der' },
+        ],
+        porPrep,
+        { vacio: `No hay moliendas en ${anio}.` }
+        );
+    }
+
+    function renderAnual() {
+        const anios = [...new Set(resumen.map((r) => Number(r.mes.slice(0, 4))))].sort((a, b) => b - a);
+        const filas = anios.map((a) => {
+        const rs = resumen.filter((r) => Number(r.mes.slice(0, 4)) === a);
+        const kilos = rs.reduce((s, r) => s + Number(r.kilos), 0);
+        const costo = rs.reduce((s, r) => s + Number(r.costo_total), 0);
+        const meses = new Set(rs.map((r) => r.mes)).size;
+        return { anio: a, moliendas: rs.reduce((s, r) => s + r.moliendas, 0), kilos, costo, meses };
+        });
+        renderTabla(
+        tAnu,
+        [
+            { titulo: 'Año', valor: (x: any) => `<strong>${x.anio}</strong>` },
+            { titulo: 'Moliendas', valor: (x: any) => String(x.moliendas), clase: 'der' },
+            { titulo: 'Kilos', valor: (x: any) => kg(x.kilos, 0), clase: 'der' },
+            { titulo: 'Promedio mensual', valor: (x: any) => kg(x.kilos / Math.max(x.meses, 1), 0), clase: 'der' },
+            { titulo: 'Costo total', valor: (x: any) => pesos(x.costo), clase: 'der' },
+            { titulo: 'Costo por kg', valor: (x: any) => precio(costoKg(x.costo, x.kilos)), clase: 'der' },
+        ],
+        filas,
+        { vacio: 'Todavía no hay moliendas registradas.' }
+        );
+    }
+
+    inpMes.addEventListener('change', () => inpMes.value && cargarRegistros());
+    selAnio.addEventListener('change', renderMensual);
+
+    /* ---------------- Formulario ---------------- */
+    const m = modal('m-molienda');
+    const f = m.form;
+    const cont = document.getElementById('items')!;
+    const selPrep = f.elements.namedItem('preparacion') as HTMLSelectElement;
+    selPrep.innerHTML = '<option value="">Elegí…</option>' + opciones(PREPARACIONES);
+
+    function opcionesInsumos(sel?: number) {
+        return (
+        '<option value="">Elegí…</option>' +
+        Object.entries(TIPOS_INSUMO)
+            .map(([t, nombre]) => {
+            const items = insumos.filter((i) => i.tipo === t && i.unidad === 'kg' && (i.activo || i.id === sel));
+            if (!items.length) return '';
+            return `<optgroup label="${nombre}">${items.map((i) => `<option value="${i.id}"${i.id === sel ? ' selected' : ''}>${esc(i.nombre)}</option>`).join('')}</optgroup>`;
+            })
+            .join('')
+        );
+    }
+
+    function agregarItem(item: { insumo_id?: number; kilos?: number | string; precio_kg?: number | string } = {}) {
+        const fila = document.createElement('div');
+        fila.className = 'grid grid-cols-[1fr_1fr_2.125rem] gap-2 rounded-lg border border-borde p-2.5 sm:grid-cols-[1fr_7rem_8rem_7rem_2.125rem] sm:items-center sm:border-0 sm:p-0';
+        fila.dataset.item = '';
+        fila.innerHTML = `
+        <select class="input col-span-2 sm:col-span-1" data-f="insumo_id" required aria-label="Insumo">${opcionesInsumos(item.insumo_id)}</select>
+        <button type="button" class="btn btn-icono peligro sm:order-last" data-quitar aria-label="Quitar ingrediente" title="Quitar">${icono('trash')}</button>
+        <input class="input" data-f="kilos" type="number" min="0.01" step="0.01" placeholder="Kilos" required aria-label="Kilos" value="${item.kilos ?? ''}" />
+        <input class="input" data-f="precio_kg" type="number" min="0" step="0.0001" placeholder="$ por kg" required aria-label="Precio por kg" value="${item.precio_kg ?? ''}" />
+        <span class="num col-span-2 text-right text-[13px] font-medium sm:col-span-1" data-subtotal>$ 0</span>`;
+        cont.appendChild(fila);
+        recalcular();
+    }
+
+    function leerItems() {
+        return Array.from(cont.querySelectorAll<HTMLElement>('[data-item]')).map((fila) => {
+        const v = (k: string) => (fila.querySelector(`[data-f="${k}"]`) as HTMLInputElement).value;
+        return { fila, insumo_id: v('insumo_id'), kilos: v('kilos'), precio_kg: v('precio_kg') };
+        });
+    }
+
+    function recalcular() {
+        let kilos = 0, costo = 0;
+        for (const it of leerItems()) {
+        const sub = r2(Number(it.kilos || 0) * Number(it.precio_kg || 0));
+        (it.fila.querySelector('[data-subtotal]') as HTMLElement).textContent = pesos(sub);
+        kilos += Number(it.kilos || 0);
+        costo += sub;
+        }
+        (f.querySelector('[data-t-kilos]') as HTMLElement).textContent = kg(kilos);
+        (f.querySelector('[data-t-costo]') as HTMLElement).textContent = pesos(costo);
+        (f.querySelector('[data-t-costokg]') as HTMLElement).textContent = precio(costoKg(costo, kilos));
+    }
+
+    cont.addEventListener('input', recalcular);
+    cont.addEventListener('change', (ev) => {
+        const sel = ev.target as HTMLElement;
+        if (sel.matches('select[data-f="insumo_id"]')) {
+        const fila = sel.closest('[data-item]') as HTMLElement;
+        const ins = insumos.find((i) => String(i.id) === (sel as HTMLSelectElement).value);
+        const p = fila.querySelector('[data-f="precio_kg"]') as HTMLInputElement;
+        if (ins?.ultimo_precio !== null && ins?.ultimo_precio !== undefined) p.value = String(Number(ins.ultimo_precio));
+        recalcular();
+        }
+    });
+    cont.addEventListener('click', (ev) => {
+        const b = (ev.target as HTMLElement).closest('[data-quitar]');
+        if (b) {
+        b.closest('[data-item]')!.remove();
+        recalcular();
+        }
+    });
+    document.getElementById('btn-item')!.addEventListener('click', () => agregarItem());
+
+    document.getElementById('btn-receta')!.addEventListener('click', async () => {
+        if (!selPrep.value) {
+        aviso('Primero elegí la preparación.', 'error');
+        return;
+        }
+        const { data, error } = await supabase
+        .from('moliendas')
+        .select('id, fecha, molienda_items(insumo_id, kilos)')
+        .eq('preparacion', selPrep.value)
+        .neq('id', Number((f.elements.namedItem('id') as HTMLInputElement).value || 0))
+        .order('fecha', { ascending: false })
+        .order('id', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+        if (error) return avisoError(error);
+        if (!data) {
+        aviso('No hay moliendas anteriores de esta preparación.', 'error');
+        return;
+        }
+        cont.innerHTML = '';
+        for (const it of data.molienda_items as any[]) {
+        const ins = insumos.find((i) => i.id === it.insumo_id);
+        agregarItem({ insumo_id: it.insumo_id, kilos: Number(it.kilos), precio_kg: ins?.ultimo_precio !== null && ins?.ultimo_precio !== undefined ? Number(ins.ultimo_precio) : '' });
+        }
+        aviso(`Receta copiada de la molienda del ${fecha(data.fecha)} con precios actuales.`);
+    });
+
+    async function asegurarInsumos() {
+        const { data, error } = await supabase.from('v_insumos').select('id, nombre, tipo, unidad, activo, ultimo_precio').order('nombre');
+        if (error) throw error;
+        insumos = data ?? [];
+    }
+
+    document.getElementById('btn-nueva')!.addEventListener('click', async () => {
+        try {
+        await asegurarInsumos();
+        } catch (e) {
+        return avisoError(e);
+        }
+        f.reset();
+        (f.elements.namedItem('id') as HTMLInputElement).value = '';
+        (f.elements.namedItem('fecha') as HTMLInputElement).value = hoyISO();
+        cont.innerHTML = '';
+        agregarItem();
+        m.abrir('Nueva molienda');
+    });
+
+    alAccion(tReg, {
+        editar: async (id) => {
+        const mo = moliendas.find((x) => String(x.id) === id);
+        if (!mo) return;
+        try {
+            await asegurarInsumos();
+            const { data, error } = await supabase.from('molienda_items').select('*').eq('molienda_id', mo.id).order('id');
+            if (error) throw error;
+            f.reset();
+            (f.elements.namedItem('id') as HTMLInputElement).value = String(mo.id);
+            (f.elements.namedItem('fecha') as HTMLInputElement).value = mo.fecha;
+            selPrep.value = mo.preparacion;
+            (f.elements.namedItem('notas') as HTMLTextAreaElement).value = mo.notas ?? '';
+            cont.innerHTML = '';
+            (data ?? []).forEach((it) => agregarItem({ insumo_id: it.insumo_id, kilos: Number(it.kilos), precio_kg: Number(it.precio_kg) }));
+            m.abrir('Editar molienda');
+        } catch (e) {
+            avisoError(e);
+        }
+        },
+        eliminar: async (id) => {
+        if (!(await confirmar('¿Eliminar esta molienda y sus ingredientes?', { boton: 'Eliminar' }))) return;
+        try {
+            await eliminarFila('moliendas', id);
+            aviso('Molienda eliminada');
+            cargar();
+        } catch (e) {
+            avisoError(e);
+        }
+        },
+    });
+
+    f.addEventListener('submit', (ev) => {
+        ev.preventDefault();
+        const items = leerItems();
+        if (items.length === 0) {
+        aviso('Agregá al menos un ingrediente.', 'error');
+        return;
+        }
+        const ids = items.map((i) => i.insumo_id);
+        if (new Set(ids).size !== ids.length) {
+        aviso('Hay un insumo repetido. Sumá los kilos en una sola fila.', 'error');
+        return;
+        }
+        conCarga(f.querySelector('[data-guardar]'), async () => {
+        const d = leerForm(f);
+        const { error } = await supabase.rpc('guardar_molienda', {
+            datos: {
+            id: d.id || null,
+            fecha: d.fecha,
+            preparacion: d.preparacion,
+            notas: d.notas,
+            items: items.map((i) => ({ insumo_id: Number(i.insumo_id), kilos: Number(i.kilos), precio_kg: Number(i.precio_kg) })),
+            },
+        });
+        if (error) return avisoError(error);
+        m.cerrar();
+        aviso(d.id ? 'Molienda actualizada' : 'Molienda registrada');
+        if (d.fecha.slice(0, 7) !== inpMes.value) inpMes.value = d.fecha.slice(0, 7);
+        cargar();
+        });
+    });
+
+    function cargar() {
+        cargarRegistros();
+        cargarResumen();
+    }
+
+    iniciarPagina().then(cargar);
+</script>

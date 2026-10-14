@@ -1,0 +1,26 @@
+---
+import Icon from './Icon.astro';
+
+interface Props {
+    id: string;
+    titulo: string;
+    ancho?: boolean;
+    boton?: string;
+}
+const { id, titulo, ancho = false, boton = 'Guardar' } = Astro.props;
+---
+<dialog id={id} class:list={['modal', { 'modal-ancho': ancho }]} aria-labelledby={`${id}-titulo`}>
+    <form autocomplete="off">
+        <div class="modal-cabecera">
+        <h2 class="modal-titulo" id={`${id}-titulo`} data-modal-titulo>{titulo}</h2>
+        <button type="button" class="btn btn-icono" data-cerrar aria-label="Cerrar"><Icon name="x" /></button>
+        </div>
+        <div class="modal-cuerpo">
+        <slot />
+        </div>
+        <div class="modal-pie">
+        <button type="button" class="btn" data-cerrar>Cancelar</button>
+        <button type="submit" class="btn btn-primario" data-guardar>{boton}</button>
+        </div>
+    </form>
+</dialog>

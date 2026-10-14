@@ -1,0 +1,337 @@
+---
+import AppLayout from '../../layouts/AppLayout.astro';
+import Modal from '../../components/Modal.astro';
+import CerdaModal from '../../components/CerdaModal.astro';
+import ReproModales from '../../components/ReproModales.astro';
+import Icon from '../../components/Icon.astro';
+---
+<AppLayout titulo="Ficha de cerda" subtitulo="Datos, servicios, partos e historial completo">
+    <a slot="acciones" href="/cerdas/" class="btn btn-fantasma"><Icon name="arrow-left" /> Volver</a>
+
+    <div id="no-encontrada" class="tarjeta hidden p-10 text-center text-texto-2">
+        No se encontró la cerda. <a class="enlace" href="/cerdas/">Volver al listado</a>
+    </div>
+
+    <div id="contenido" class="grid gap-5">
+        <!-- Datos -->
+        <section class="tarjeta">
+        <div class="tarjeta-cabecera">
+            <div class="flex min-w-0 items-center gap-3">
+            <span class="grid size-10 shrink-0 place-items-center rounded-lg bg-marca-suave text-marca"><Icon name="pig" /></span>
+            <div class="min-w-0">
+                <p class="truncate text-lg font-semibold" id="f-caravana"><span class="esqueleto inline-block h-5 w-24"></span></p>
+                <p id="f-estado"></p>
+            </div>
+            </div>
+            <div class="flex flex-wrap gap-2">
+            <button type="button" class="btn btn-sm" id="btn-editar"><Icon name="pencil" class="icon size-4" /> Editar</button>
+            <button type="button" class="btn btn-sm" id="btn-baja">Dar de baja</button>
+            <button type="button" class="btn btn-sm hidden" id="btn-reactivar">Reactivar</button>
+            <button type="button" class="btn btn-sm btn-icono peligro" id="btn-eliminar" data-solo-dueno title="Eliminar cerda" aria-label="Eliminar cerda"><Icon name="trash" class="icon size-4" /></button>
+            </div>
+        </div>
+        <dl class="grid grid-cols-2 gap-x-6 gap-y-3 p-4 text-sm sm:grid-cols-4" id="f-datos"></dl>
+        </section>
+
+        <!-- Indicadores -->
+        <div class="grid grid-cols-2 gap-3 lg:grid-cols-5" id="f-kpis"></div>
+
+        <!-- Servicios -->
+        <section class="tarjeta">
+        <div class="tarjeta-cabecera">
+            <h2 class="tarjeta-titulo">Servicios (inseminaciones)</h2>
+            <button type="button" class="btn btn-sm btn-primario" id="btn-servicio" data-requiere-activa><Icon name="droplet" class="icon size-4" /> Registrar servicio</button>
+        </div>
+        <div class="tabla-contenedor"><table class="tabla tabla-movil" id="t-servicios"></table></div>
+        </section>
+
+        <!-- Partos -->
+        <section class="tarjeta">
+        <div class="tarjeta-cabecera">
+            <h2 class="tarjeta-titulo">Partos y destetes</h2>
+            <button type="button" class="btn btn-sm btn-primario" id="btn-parto" data-requiere-activa><Icon name="baby-carriage" class="icon size-4" /> Registrar parto</button>
+        </div>
+        <div class="tabla-contenedor"><table class="tabla tabla-movil" id="t-partos"></table></div>
+        </section>
+    </div>
+
+    <Fragment slot="modales">
+        <CerdaModal />
+        <ReproModales />
+        <Modal id="m-baja" titulo="Dar de baja" boton="Dar de baja">
+        <div class="campo">
+            <label class="etiqueta" for="b-estado">Motivo</label>
+            <select class="input" id="b-estado" name="estado" required>
+            <option value="descartada">Descarte (no rinde, venta, etc.)</option>
+            <option value="muerta">Muerte</option>
+            </select>
+        </div>
+        <div class="campo">
+            <label class="etiqueta" for="b-fecha">Fecha</label>
+            <input class="input" id="b-fecha" name="fecha_baja" type="date" required />
+        </div>
+        <div class="campo">
+            <label class="etiqueta" for="b-detalle">Detalle</label>
+            <textarea class="input" id="b-detalle" name="motivo_baja" rows="2" placeholder="Ej.: baja prolificidad, problemas de patas"></textarea>
+        </div>
+        <p class="ayuda">Si la vendiste, registrá también la venta como «Cerda de descarte» en Ventas.</p>
+        </Modal>
+    </Fragment>
+</AppLayout>
+
+<script>
+    import { supabase } from '../../lib/supabase';
+    import { iniciarPagina } from '../../lib/sesion';
+    import { esc, fecha, hoyISO, numero, pesos, porcentaje } from '../../lib/formato';
+    import { aviso, avisoError, alAccion, botonAccion, conCarga, confirmar, eliminarFila, guardarFila, leerForm, llenarForm, modal, numONull, renderTabla, tablaCargando, textoONull, type Columna } from '../../lib/ui';
+    import { RESULTADOS_SERVICIO } from '../../lib/etiquetas';
+    import { estadoReproductivo } from '../../lib/cerdas';
+    import { abrirDestete, abrirParto, abrirServicio, iniciarRepro } from '../../lib/repro';
+
+    const id = Number(new URLSearchParams(location.search).get('id'));
+    let cerda: any = null;
+    let servicios: any[] = [];
+    let partos: any[] = [];
+
+    const tServ = document.getElementById('t-servicios') as HTMLTableElement;
+    const tPart = document.getElementById('t-partos') as HTMLTableElement;
+
+    function noEncontrada() {
+        document.getElementById('contenido')!.classList.add('hidden');
+        document.getElementById('no-encontrada')!.classList.remove('hidden');
+    }
+
+    async function cargar() {
+        if (!id) return noEncontrada();
+        tablaCargando(tServ, 5, 2);
+        tablaCargando(tPart, 6, 2);
+        const [c, s, p] = await Promise.all([
+        supabase.from('v_cerdas').select('*').eq('id', id).maybeSingle(),
+        supabase.from('servicios').select('*').eq('cerda_id', id).order('fecha', { ascending: false }).order('id', { ascending: false }),
+        supabase.from('partos').select('*').eq('cerda_id', id).order('fecha', { ascending: false }).order('id', { ascending: false }),
+        ]);
+        const err = c.error || s.error || p.error;
+        if (err) return avisoError(err);
+        if (!c.data) return noEncontrada();
+        cerda = c.data;
+        servicios = s.data ?? [];
+        partos = p.data ?? [];
+        render();
+    }
+
+    function dato(t: string, v: string) {
+        return `<div class="min-w-0"><dt class="text-xs text-texto-3">${t}</dt><dd class="mt-0.5 font-medium break-words">${v}</dd></div>`;
+    }
+    function kpi(t: string, v: string, det = '') {
+        return `<div class="tarjeta kpi"><span class="kpi-etiqueta">${t}</span><span class="kpi-valor">${v}</span>${det ? `<span class="kpi-detalle">${det}</span>` : ''}</div>`;
+    }
+
+    function render() {
+        const activa = cerda.estado === 'activa';
+        document.title = `${cerda.caravana} · Criadero`;
+        document.getElementById('f-caravana')!.textContent = cerda.caravana;
+        const e = estadoReproductivo(cerda);
+        document.getElementById('f-estado')!.innerHTML = `<span class="badge ${e.clase}">${e.texto}</span>`;
+        document.getElementById('btn-baja')!.classList.toggle('hidden', !activa);
+        document.getElementById('btn-reactivar')!.classList.toggle('hidden', activa);
+        document.querySelectorAll<HTMLElement>('[data-requiere-activa]').forEach((b) => (b.hidden = !activa));
+
+        let datos =
+        dato('Origen', esc(cerda.origen ?? '—')) +
+        dato('Fecha de ingreso', fecha(cerda.fecha_ingreso)) +
+        dato('Precio de compra', cerda.precio_compra !== null ? pesos(cerda.precio_compra) : '—') +
+        dato('Último servicio', fecha(cerda.ultimo_servicio));
+        if (!activa) datos += dato('Fecha de baja', fecha(cerda.fecha_baja)) + dato('Motivo de baja', esc(cerda.motivo_baja ?? '—'));
+        if (cerda.notas) datos += `<div class="col-span-full">${dato('Notas', esc(cerda.notas))}</div>`;
+        document.getElementById('f-datos')!.innerHTML = datos;
+
+        const totNac = partos.reduce((a, p) => a + p.nacidos_totales, 0);
+        const totVivos = partos.reduce((a, p) => a + p.nacidos_vivos, 0);
+        const destetadas = partos.filter((p) => p.destetados !== null);
+        const vivosDest = destetadas.reduce((a, p) => a + p.nacidos_vivos, 0);
+        const totDest = destetadas.reduce((a, p) => a + p.destetados, 0);
+        const mortLact = vivosDest > 0 ? ((vivosDest - totDest) / vivosDest) * 100 : null;
+        document.getElementById('f-kpis')!.innerHTML =
+        kpi('Partos', String(partos.length)) +
+        kpi('Nacidos totales', String(totNac), `${totNac - totVivos} muertos al nacer`) +
+        kpi('Promedio vivos', cerda.prom_vivos !== null ? numero(cerda.prom_vivos, 1) : '—', 'por parto') +
+        kpi('Promedio destetados', cerda.prom_destetados !== null ? numero(cerda.prom_destetados, 1) : '—', 'por parto') +
+        kpi('Mortalidad lactancia', mortLact !== null ? porcentaje(mortLact) : '—', `${totDest} destetados en total`);
+
+        const colServ: Columna<any>[] = [
+        { titulo: 'Fecha', valor: (s) => fecha(s.fecha) },
+        { titulo: 'Dosis', valor: (s) => String(s.dosis), clase: 'der' },
+        { titulo: 'Parto probable', valor: (s) => fecha(s.fecha_probable_parto), clase: 'der' },
+        {
+            titulo: 'Resultado',
+            valor: (s) => {
+            const r = RESULTADOS_SERVICIO[s.resultado];
+            return `<span class="badge ${r.clase}">${r.texto}</span>`;
+            },
+        },
+        {
+            titulo: '',
+            clase: 'acciones',
+            valor: (s) =>
+            (s.resultado === 'pendiente'
+                ? botonAccion('prenada', s.id, 'check', 'Confirmar preñez') + botonAccion('vacia', s.id, 'x', 'Marcar vacía (repite)')
+                : '') +
+            botonAccion('editar-serv', s.id, 'pencil', 'Editar') +
+            (s.resultado !== 'parida' ? botonAccion('eliminar-serv', s.id, 'trash', 'Eliminar') : ''),
+        },
+        ];
+        renderTabla(tServ, colServ, servicios, { vacio: 'Sin servicios registrados.' });
+
+        const colPart: Columna<any>[] = [
+        { titulo: 'Fecha', valor: (p) => fecha(p.fecha) },
+        { titulo: 'Nacidos', valor: (p) => String(p.nacidos_totales), clase: 'der' },
+        { titulo: 'Muertos al nacer', valor: (p) => String(p.nacidos_muertos), clase: 'der' },
+        { titulo: 'Vivos', valor: (p) => `<strong>${p.nacidos_vivos}</strong>`, clase: 'der' },
+        { titulo: 'Destete', valor: (p) => (p.fecha_destete ? fecha(p.fecha_destete) : '<span class="badge badge-marca">En lactancia</span>'), clase: 'der' },
+        { titulo: 'Destetados', valor: (p) => (p.destetados ?? '—').toString(), clase: 'der' },
+        { titulo: 'Muertes lactancia', valor: (p) => (p.destetados !== null ? String(p.nacidos_vivos - p.destetados) : '—'), clase: 'der' },
+        {
+            titulo: '',
+            clase: 'acciones',
+            valor: (p) =>
+            botonAccion('destete', p.id, 'baby-carriage', p.destetados === null ? 'Registrar destete' : 'Corregir destete') +
+            botonAccion('editar-parto', p.id, 'pencil', 'Editar') +
+            botonAccion('eliminar-parto', p.id, 'trash', 'Eliminar'),
+        },
+        ];
+        const pie =
+        partos.length > 1
+            ? ['Total', String(totNac), String(totNac - totVivos), String(totVivos), '', String(totDest), String(vivosDest - totDest), '']
+            : null;
+        renderTabla(tPart, colPart, partos, { vacio: 'Sin partos registrados.', pie });
+    }
+
+    // Servicios
+    async function cambiarResultado(sid: string, resultado: string) {
+        try {
+        await guardarFila('servicios', { resultado }, sid);
+        aviso(resultado === 'prenada' ? 'Preñez confirmada' : 'Servicio marcado como vacío');
+        cargar();
+        } catch (e) {
+        avisoError(e);
+        }
+    }
+    alAccion(tServ, {
+        prenada: (sid) => cambiarResultado(sid, 'prenada'),
+        vacia: (sid) => cambiarResultado(sid, 'vacia'),
+        'editar-serv': (sid) => abrirServicio({ servicio: servicios.find((s) => String(s.id) === sid), fijarCerda: true }),
+        'eliminar-serv': async (sid) => {
+        if (!(await confirmar('¿Eliminar este servicio?', { boton: 'Eliminar' }))) return;
+        try {
+            await eliminarFila('servicios', sid);
+            aviso('Servicio eliminado');
+            cargar();
+        } catch (e) {
+            avisoError(e);
+        }
+        },
+    });
+
+    // Partos
+    alAccion(tPart, {
+        destete: (pid) => abrirDestete(partos.find((p) => String(p.id) === pid), cerda.caravana),
+        'editar-parto': (pid) => abrirParto({ parto: partos.find((p) => String(p.id) === pid), fijarCerda: true }),
+        'eliminar-parto': async (pid) => {
+        const ok = await confirmar('Se eliminará el parto y todos sus movimientos de stock (muertes y ventas asociadas a esta camada). Esta acción no se puede deshacer.', {
+            titulo: 'Eliminar parto',
+            boton: 'Eliminar',
+        });
+        if (!ok) return;
+        try {
+            await eliminarFila('partos', pid);
+            aviso('Parto eliminado');
+            cargar();
+        } catch (e) {
+            avisoError(e);
+        }
+        },
+    });
+
+    document.getElementById('btn-servicio')!.addEventListener('click', () => abrirServicio({ cerdaId: id, fijarCerda: true }));
+    document.getElementById('btn-parto')!.addEventListener('click', () => abrirParto({ cerdaId: id, fijarCerda: true }));
+
+    // Editar datos
+    const mc = modal('m-cerda');
+    document.getElementById('btn-editar')!.addEventListener('click', () => {
+        mc.form.reset();
+        llenarForm(mc.form, cerda);
+        mc.abrir('Editar cerda');
+    });
+    mc.form.addEventListener('submit', (ev) => {
+        ev.preventDefault();
+        conCarga(mc.form.querySelector('[data-guardar]'), async () => {
+        const d = leerForm(mc.form);
+        try {
+            await guardarFila(
+            'cerdas',
+            { caravana: d.caravana, origen: textoONull(d.origen), fecha_ingreso: d.fecha_ingreso, precio_compra: numONull(d.precio_compra), notas: textoONull(d.notas) },
+            id
+            );
+            mc.cerrar();
+            aviso('Datos actualizados');
+            cargar();
+        } catch (e) {
+            avisoError(e);
+        }
+        });
+    });
+
+    // Baja / reactivación
+    const mb = modal('m-baja');
+    document.getElementById('btn-baja')!.addEventListener('click', () => {
+        mb.form.reset();
+        (mb.form.elements.namedItem('fecha_baja') as HTMLInputElement).value = hoyISO();
+        (mb.form.elements.namedItem('fecha_baja') as HTMLInputElement).min = cerda.fecha_ingreso;
+        mb.abrir();
+    });
+    mb.form.addEventListener('submit', (ev) => {
+        ev.preventDefault();
+        conCarga(mb.form.querySelector('[data-guardar]'), async () => {
+        const d = leerForm(mb.form);
+        try {
+            await guardarFila('cerdas', { estado: d.estado, fecha_baja: d.fecha_baja, motivo_baja: textoONull(d.motivo_baja) }, id);
+            mb.cerrar();
+            aviso('Cerda dada de baja');
+            cargar();
+        } catch (e) {
+            avisoError(e);
+        }
+        });
+    });
+    const btnReactivar = document.getElementById('btn-reactivar') as HTMLButtonElement;
+    btnReactivar.addEventListener('click', async () => {
+        if (!(await confirmar('¿Volver a poner esta cerda como activa?', { boton: 'Reactivar', peligro: false }))) return;
+        conCarga(btnReactivar, async () => {
+        try {
+            await guardarFila('cerdas', { estado: 'activa', fecha_baja: null, motivo_baja: null }, id);
+            aviso('Cerda reactivada');
+            cargar();
+        } catch (e) {
+            avisoError(e);
+        }
+        });
+    });
+
+    // Eliminar (solo si no tiene partos)
+    document.getElementById('btn-eliminar')!.addEventListener('click', async () => {
+        if (partos.length > 0) {
+        aviso('No se puede eliminar una cerda con partos registrados. Usá «Dar de baja» para conservar su historial.', 'error');
+        return;
+        }
+        if (!(await confirmar(`¿Eliminar definitivamente la cerda ${cerda.caravana} y sus servicios?`, { boton: 'Eliminar' }))) return;
+        try {
+        await eliminarFila('cerdas', id);
+        location.replace('/cerdas/');
+        } catch (e) {
+        avisoError(e);
+        }
+    });
+
+    iniciarRepro(cargar);
+    iniciarPagina().then(cargar);
+</script>

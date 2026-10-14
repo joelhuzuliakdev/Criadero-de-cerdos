@@ -1,0 +1,243 @@
+---
+import AppLayout from '../layouts/AppLayout.astro';
+import Modal from '../components/Modal.astro';
+import Icon from '../components/Icon.astro';
+---
+<AppLayout titulo="Stock de animales" subtitulo="Se actualiza solo con cada parto, destete, muerte y venta">
+    <button slot="acciones" type="button" class="btn btn-primario" id="btn-baja"><Icon name="plus" /> Registrar baja</button>
+
+    <div class="mb-5 grid grid-cols-2 gap-3 lg:grid-cols-4">
+        <div class="tarjeta kpi"><span class="kpi-etiqueta">Lechones</span><span class="kpi-valor" data-k="lechon">—</span><span class="kpi-detalle">0 a 69 días</span></div>
+        <div class="tarjeta kpi"><span class="kpi-etiqueta">Cachorros</span><span class="kpi-valor" data-k="cachorro">—</span><span class="kpi-detalle">70 a 119 días</span></div>
+        <div class="tarjeta kpi"><span class="kpi-etiqueta">Capones</span><span class="kpi-valor" data-k="capon">—</span><span class="kpi-detalle">120 días o más</span></div>
+        <div class="tarjeta kpi"><span class="kpi-etiqueta">Total de animales</span><span class="kpi-valor" data-k="total">—</span><span class="kpi-detalle" data-k-madres>+ cerdas madres</span></div>
+    </div>
+
+    <div class="grid gap-5">
+        <section class="tarjeta">
+        <div class="tarjeta-cabecera">
+            <h2 class="tarjeta-titulo">Camadas</h2>
+            <div class="flex flex-wrap items-center gap-3">
+            <div class="pestanas" role="tablist" id="filtro-cat">
+                <button class="pestana" role="tab" aria-selected="true" data-cat="">Todas</button>
+                <button class="pestana" role="tab" aria-selected="false" data-cat="lechon">Lechones</button>
+                <button class="pestana" role="tab" aria-selected="false" data-cat="cachorro">Cachorros</button>
+                <button class="pestana" role="tab" aria-selected="false" data-cat="capon">Capones</button>
+            </div>
+            <label class="flex items-center gap-2 text-[13px] text-texto-2">
+                <input type="checkbox" id="ver-vacias" class="size-4 accent-[var(--color-marca)]" /> Ver camadas sin animales
+            </label>
+            </div>
+        </div>
+        <div class="tabla-contenedor"><table class="tabla tabla-movil" id="t-camadas"></table></div>
+        </section>
+
+        <section class="tarjeta">
+        <div class="tarjeta-cabecera">
+            <h2 class="tarjeta-titulo">Últimos movimientos</h2>
+            <span class="text-xs text-texto-3">Muertes, ventas y consumo</span>
+        </div>
+        <div class="tabla-contenedor"><table class="tabla tabla-movil" id="t-bajas"></table></div>
+        </section>
+    </div>
+
+    <Fragment slot="modales">
+        <Modal id="m-baja" titulo="Registrar baja">
+        <div class="campo">
+            <label class="etiqueta" for="b-camada">Camada</label>
+            <select class="input" id="b-camada" name="parto_id" required></select>
+        </div>
+        <div class="grid grid-cols-2 gap-3">
+            <div class="campo">
+            <label class="etiqueta" for="b-motivo">Motivo</label>
+            <select class="input" id="b-motivo" name="motivo" required>
+                <option value="muerte">Muerte</option>
+                <option value="consumo">Consumo propio</option>
+                <option value="otro">Otro</option>
+            </select>
+            </div>
+            <div class="campo">
+            <label class="etiqueta" for="b-cantidad">Cantidad</label>
+            <input class="input" id="b-cantidad" name="cantidad" type="number" min="1" step="1" required />
+            </div>
+        </div>
+        <div class="campo">
+            <label class="etiqueta" for="b-fecha">Fecha</label>
+            <input class="input" id="b-fecha" name="fecha" type="date" required />
+        </div>
+        <div class="campo">
+            <label class="etiqueta" for="b-notas">Notas</label>
+            <textarea class="input" id="b-notas" name="notas" rows="2" placeholder="Ej.: causa de la muerte"></textarea>
+        </div>
+        <p class="ayuda">Las ventas se registran en la sección Ventas y descuentan el stock automáticamente.</p>
+        </Modal>
+    </Fragment>
+</AppLayout>
+
+<script>
+    import { supabase } from '../lib/supabase';
+    import { iniciarPagina } from '../lib/sesion';
+    import { esc, fecha, hoyISO } from '../lib/formato';
+    import { aviso, avisoError, alAccion, botonAccion, conCarga, confirmar, eliminarFila, guardarFila, leerForm, modal, renderTabla, tablaCargando, textoONull, type Columna } from '../lib/ui';
+    import { CATEGORIAS, MOTIVOS_BAJA } from '../lib/etiquetas';
+
+    const tCam = document.getElementById('t-camadas') as HTMLTableElement;
+    const tBaj = document.getElementById('t-bajas') as HTMLTableElement;
+    const verVacias = document.getElementById('ver-vacias') as HTMLInputElement;
+    let camadas: any[] = [];
+    let bajas: any[] = [];
+    let filtroCat = '';
+
+    const claseCat: Record<string, string> = { lechon: 'badge-info', cachorro: 'badge-alerta', capon: 'badge-ok' };
+    const set = (k: string, v: string) => ((document.querySelector(`[data-k="${k}"]`) as HTMLElement).textContent = v);
+    const nombreCamada = (c: any) => `${c.caravana} · ${fecha(c.fecha_nacimiento)}`;
+
+    function proximoCambio(dias: number) {
+        if (dias < 70) return `Cachorro en ${70 - dias} d`;
+        if (dias < 120) return `Capón en ${120 - dias} d`;
+        return '—';
+    }
+
+    async function cargar() {
+        tablaCargando(tCam, 7, 4);
+        tablaCargando(tBaj, 5, 3);
+        const [c, b, m] = await Promise.all([
+        supabase.from('v_stock_camadas').select('*').order('fecha_nacimiento', { ascending: false }),
+        supabase.from('bajas').select('*, partos(fecha, cerdas(caravana))').order('fecha', { ascending: false }).order('id', { ascending: false }).limit(50),
+        supabase.from('cerdas').select('id', { count: 'exact', head: true }).eq('estado', 'activa'),
+        ]);
+        if (c.error || b.error || m.error) return avisoError(c.error || b.error || m.error);
+        camadas = c.data ?? [];
+        bajas = b.data ?? [];
+        const madres = m.count ?? 0;
+
+        const suma = (cat: string) => camadas.filter((x) => x.categoria === cat).reduce((a, x) => a + Math.max(x.vivos, 0), 0);
+        const tot = suma('lechon') + suma('cachorro') + suma('capon');
+        set('lechon', String(suma('lechon')));
+        set('cachorro', String(suma('cachorro')));
+        set('capon', String(suma('capon')));
+        set('total', String(tot + madres));
+        (document.querySelector('[data-k-madres]') as HTMLElement).textContent = `Incluye ${madres} cerdas madres`;
+        render();
+    }
+
+    function render() {
+        const lista = camadas.filter((c) => (verVacias.checked || c.vivos > 0) && (!filtroCat || c.categoria === filtroCat));
+        const col: Columna<any>[] = [
+        { titulo: 'Madre', valor: (c) => `<a class="enlace" href="/cerdas/ficha/?id=${c.cerda_id}">${esc(c.caravana)}</a>` },
+        { titulo: 'Nacimiento', valor: (c) => fecha(c.fecha_nacimiento) },
+        { titulo: 'Días', valor: (c) => String(c.dias), clase: 'der' },
+        { titulo: 'Categoría', valor: (c) => `<span class="badge ${claseCat[c.categoria]}">${CATEGORIAS[c.categoria]}</span>` },
+        { titulo: 'Nacidos vivos', valor: (c) => String(c.nacidos_vivos), clase: 'der' },
+        { titulo: 'Bajas', valor: (c) => String(c.bajas), clase: 'der' },
+        { titulo: 'En stock', valor: (c) => `<strong>${c.vivos}</strong>`, clase: 'der' },
+        { titulo: 'Próximo cambio', valor: (c) => (c.vivos > 0 ? proximoCambio(c.dias) : '—'), clase: 'der' },
+        { titulo: '', clase: 'acciones', valor: (c) => (c.vivos > 0 ? botonAccion('baja', c.parto_id, 'x', 'Registrar baja') : '') },
+        ];
+        const total = lista.reduce((a, c) => a + c.vivos, 0);
+        renderTabla(tCam, col, lista, {
+        vacio: 'No hay animales en stock. El stock se genera al registrar partos en Reproducción.',
+        pie: ['Total', '', '', '', '', '', String(total), '', ''],
+        });
+
+        const colB: Columna<any>[] = [
+        { titulo: 'Fecha', valor: (b) => fecha(b.fecha) },
+        { titulo: 'Camada', valor: (b) => `${esc(b.partos?.cerdas?.caravana ?? '')} · ${fecha(b.partos?.fecha)}` },
+        {
+            titulo: 'Motivo',
+            valor: (b) => {
+            const t = b.es_destete ? 'Muerte en lactancia' : MOTIVOS_BAJA[b.motivo];
+            const c = b.motivo === 'venta' ? 'badge-ok' : b.motivo === 'muerte' ? 'badge-error' : '';
+            return `<span class="badge ${c}">${t}</span>`;
+            },
+        },
+        { titulo: 'Cantidad', valor: (b) => String(b.cantidad), clase: 'der' },
+        { titulo: 'Notas', valor: (b) => esc(b.notas ?? '') },
+        {
+            titulo: '',
+            clase: 'acciones',
+            valor: (b) => (b.motivo !== 'venta' && !b.es_destete ? botonAccion('eliminar', b.id, 'trash', 'Eliminar movimiento') : ''),
+        },
+        ];
+        renderTabla(tBaj, colB, bajas, { vacio: 'Sin movimientos registrados.' });
+    }
+
+    // Filtros
+    verVacias.addEventListener('change', render);
+    document.querySelectorAll<HTMLButtonElement>('#filtro-cat [data-cat]').forEach((b) =>
+        b.addEventListener('click', () => {
+        filtroCat = b.dataset.cat ?? '';
+        document.querySelectorAll('#filtro-cat [data-cat]').forEach((x) => x.setAttribute('aria-selected', String(x === b)));
+        render();
+        })
+    );
+
+    // Registrar baja
+    const m = modal('m-baja');
+    const selCamada = m.form.elements.namedItem('parto_id') as HTMLSelectElement;
+    const inpCant = m.form.elements.namedItem('cantidad') as HTMLInputElement;
+    const inpFecha = m.form.elements.namedItem('fecha') as HTMLInputElement;
+
+    function ajustarLimites() {
+        const c = camadas.find((x) => String(x.parto_id) === selCamada.value);
+        inpCant.max = c ? String(c.vivos) : '';
+        inpFecha.min = c ? c.fecha_nacimiento : '';
+    }
+    selCamada.addEventListener('change', ajustarLimites);
+
+    function abrirBaja(partoId?: string) {
+        const disp = camadas.filter((c) => c.vivos > 0);
+        if (disp.length === 0) {
+        aviso('No hay animales en stock para dar de baja.', 'error');
+        return;
+        }
+        m.form.reset();
+        selCamada.innerHTML =
+        '<option value="">Elegí una camada…</option>' +
+        disp.map((c) => `<option value="${c.parto_id}">${esc(nombreCamada(c))} · ${CATEGORIAS[c.categoria]} · ${c.vivos} en stock</option>`).join('');
+        if (partoId) selCamada.value = partoId;
+        inpFecha.value = hoyISO();
+        inpFecha.max = hoyISO();
+        ajustarLimites();
+        m.abrir();
+    }
+
+    document.getElementById('btn-baja')!.addEventListener('click', () => abrirBaja());
+    alAccion(tCam, { baja: (id) => abrirBaja(id) });
+
+    m.form.addEventListener('submit', (ev) => {
+        ev.preventDefault();
+        conCarga(m.form.querySelector('[data-guardar]'), async () => {
+        const d = leerForm(m.form);
+        try {
+            await guardarFila('bajas', {
+            parto_id: Number(d.parto_id),
+            fecha: d.fecha,
+            cantidad: Number(d.cantidad),
+            motivo: d.motivo,
+            notas: textoONull(d.notas),
+            });
+            m.cerrar();
+            aviso('Baja registrada. El stock se actualizó.');
+            cargar();
+        } catch (e) {
+            avisoError(e);
+        }
+        });
+    });
+
+    alAccion(tBaj, {
+        eliminar: async (id) => {
+        if (!(await confirmar('¿Eliminar este movimiento? Los animales vuelven al stock.', { boton: 'Eliminar' }))) return;
+        try {
+            await eliminarFila('bajas', id);
+            aviso('Movimiento eliminado');
+            cargar();
+        } catch (e) {
+            avisoError(e);
+        }
+        },
+    });
+
+    iniciarPagina().then(cargar);
+</script>

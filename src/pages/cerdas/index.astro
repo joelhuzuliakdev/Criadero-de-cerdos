@@ -1,0 +1,140 @@
+---
+import AppLayout from '../../layouts/AppLayout.astro';
+import CerdaModal from '../../components/CerdaModal.astro';
+import Icon from '../../components/Icon.astro';
+---
+<AppLayout titulo="Cerdas madres" subtitulo="Plantel reproductor, origen e historial de cada cerda">
+    <button slot="acciones" type="button" class="btn btn-primario" id="btn-nueva"><Icon name="plus" /> Nueva cerda</button>
+
+    <div class="mb-4 grid grid-cols-2 gap-3 sm:grid-cols-4" id="kpis">
+        <div class="tarjeta kpi"><span class="kpi-etiqueta">Activas</span><span class="kpi-valor" data-k="activas">—</span></div>
+        <div class="tarjeta kpi"><span class="kpi-etiqueta">Preñadas / a confirmar</span><span class="kpi-valor" data-k="servidas">—</span></div>
+        <div class="tarjeta kpi"><span class="kpi-etiqueta">En lactancia</span><span class="kpi-valor" data-k="lactando">—</span></div>
+        <div class="tarjeta kpi"><span class="kpi-etiqueta">Vacías</span><span class="kpi-valor" data-k="vacias">—</span></div>
+    </div>
+
+    <section class="tarjeta">
+        <div class="tarjeta-cabecera">
+        <div class="relative w-full sm:w-64">
+            <span class="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-texto-3"><Icon name="search" class="icon size-4" /></span>
+            <input class="input pl-8" type="search" id="buscar" placeholder="Buscar caravana u origen" aria-label="Buscar" />
+        </div>
+        <div class="pestanas" role="tablist" id="filtro-estado">
+            <button class="pestana" role="tab" aria-selected="true" data-estado="activa">Activas</button>
+            <button class="pestana" role="tab" aria-selected="false" data-estado="baja">Dadas de baja</button>
+            <button class="pestana" role="tab" aria-selected="false" data-estado="todas">Todas</button>
+        </div>
+        </div>
+        <div class="tabla-contenedor"><table class="tabla tabla-movil" id="tabla"></table></div>
+    </section>
+
+    <Fragment slot="modales">
+        <CerdaModal />
+    </Fragment>
+</AppLayout>
+
+<script>
+    import { supabase } from '../../lib/supabase';
+    import { iniciarPagina } from '../../lib/sesion';
+    import { esc, fecha, hoyISO, numero } from '../../lib/formato';
+    import { aviso, avisoError, conCarga, guardarFila, leerForm, modal, numONull, renderTabla, tablaCargando, textoONull, type Columna } from '../../lib/ui';
+    import { estadoReproductivo } from '../../lib/cerdas';
+    import { icono } from '../../lib/icons';
+
+    const tabla = document.getElementById('tabla') as HTMLTableElement;
+    const buscar = document.getElementById('buscar') as HTMLInputElement;
+    let filtro = 'activa';
+    let cerdas: any[] = [];
+
+    const columnas: Columna<any>[] = [
+        { titulo: 'Caravana', valor: (c) => `<a class="enlace" href="/cerdas/ficha/?id=${c.id}">${esc(c.caravana)}</a>` },
+        { titulo: 'Origen', valor: (c) => esc(c.origen ?? '—') },
+        {
+        titulo: 'Estado',
+        valor: (c) => {
+            const e = estadoReproductivo(c);
+            return `<span class="badge ${e.clase}">${e.texto}</span>`;
+        },
+        },
+        { titulo: 'Partos', valor: (c) => String(c.partos), clase: 'der' },
+        { titulo: 'Prom. vivos', valor: (c) => (c.prom_vivos !== null ? numero(c.prom_vivos, 1) : '—'), clase: 'der' },
+        { titulo: 'Prom. destetados', valor: (c) => (c.prom_destetados !== null ? numero(c.prom_destetados, 1) : '—'), clase: 'der' },
+        {
+        titulo: 'Parto probable',
+        valor: (c) =>
+            c.estado === 'activa' && ['pendiente', 'prenada'].includes(c.ultimo_resultado) ? fecha(c.fecha_probable_parto) : '—',
+        clase: 'der',
+        },
+        {
+        titulo: '',
+        valor: (c) => `<a class="btn btn-icono" href="/cerdas/ficha/?id=${c.id}" title="Ver ficha" aria-label="Ver ficha">${icono('chevron-right')}</a>`,
+        clase: 'acciones',
+        },
+    ];
+
+    function render() {
+        const q = buscar.value.trim().toLowerCase();
+        const lista = cerdas.filter((c) => {
+        if (filtro === 'activa' && c.estado !== 'activa') return false;
+        if (filtro === 'baja' && c.estado === 'activa') return false;
+        if (q && !`${c.caravana} ${c.origen ?? ''}`.toLowerCase().includes(q)) return false;
+        return true;
+        });
+        renderTabla(tabla, columnas, lista, { vacio: q ? 'No hay cerdas que coincidan con la búsqueda.' : 'Todavía no hay cerdas cargadas.' });
+
+        const activas = cerdas.filter((c) => c.estado === 'activa');
+        const cuenta = (t: string) => activas.filter((c) => estadoReproductivo(c).clave === t).length;
+        const set = (k: string, v: number) => ((document.querySelector(`[data-k="${k}"]`) as HTMLElement).textContent = String(v));
+        set('activas', activas.length);
+        set('servidas', cuenta('servida'));
+        set('lactando', cuenta('lactando'));
+        set('vacias', cuenta('vacia'));
+    }
+
+    async function cargar() {
+        tablaCargando(tabla, 6);
+        const { data, error } = await supabase.from('v_cerdas').select('*').order('caravana');
+        if (error) return avisoError(error);
+        cerdas = data ?? [];
+        render();
+    }
+
+    buscar.addEventListener('input', render);
+    document.querySelectorAll<HTMLButtonElement>('#filtro-estado [data-estado]').forEach((b) =>
+        b.addEventListener('click', () => {
+        filtro = b.dataset.estado!;
+        document.querySelectorAll('#filtro-estado [data-estado]').forEach((x) => x.setAttribute('aria-selected', String(x === b)));
+        render();
+        })
+    );
+
+    // Alta de cerda
+    const m = modal('m-cerda');
+    document.getElementById('btn-nueva')!.addEventListener('click', () => {
+        m.form.reset();
+        (m.form.elements.namedItem('fecha_ingreso') as HTMLInputElement).value = hoyISO();
+        m.abrir('Nueva cerda');
+    });
+    m.form.addEventListener('submit', (ev) => {
+        ev.preventDefault();
+        conCarga(m.form.querySelector('[data-guardar]'), async () => {
+        const d = leerForm(m.form);
+        try {
+            const r = await guardarFila('cerdas', {
+            caravana: d.caravana,
+            origen: textoONull(d.origen),
+            fecha_ingreso: d.fecha_ingreso,
+            precio_compra: numONull(d.precio_compra),
+            notas: textoONull(d.notas),
+            });
+            m.cerrar();
+            aviso('Cerda registrada');
+            location.href = `/cerdas/ficha/?id=${r.id}`;
+        } catch (e) {
+            avisoError(e);
+        }
+        });
+    });
+
+    iniciarPagina().then(cargar);
+</script>

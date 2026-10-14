@@ -1,0 +1,85 @@
+---
+import '../styles/global.css';
+import Icon from '../components/Icon.astro';
+---
+<!doctype html>
+<html lang="es-AR">
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <meta name="theme-color" content="#1f3d34" />
+        <meta name="robots" content="noindex, nofollow" />
+        <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+        <title>Ingresar · Criadero</title>
+    </head>
+    <body>
+        <main class="grid min-h-dvh place-items-center px-4 py-10">
+        <div class="w-full max-w-sm">
+            <div class="mb-8 flex flex-col items-center text-center">
+            <span class="mb-4 grid size-12 place-items-center rounded-xl bg-marca text-white"><Icon name="pig" class="icon size-6" /></span>
+            <h1 class="text-xl font-semibold tracking-tight">Criadero</h1>
+            <p class="text-sm text-texto-2">Ingresá con tu usuario para continuar</p>
+            </div>
+
+            <form id="form-login" class="tarjeta grid gap-4 p-6">
+            <div id="login-error" class="hidden rounded-lg bg-error-suave px-3 py-2.5 text-[13px] text-error" role="alert"></div>
+            <div class="campo">
+                <label class="etiqueta" for="email">Correo electrónico</label>
+                <input class="input" id="email" name="email" type="email" autocomplete="username" required />
+            </div>
+            <div class="campo">
+                <label class="etiqueta" for="password">Contraseña</label>
+                <input class="input" id="password" name="password" type="password" autocomplete="current-password" required />
+            </div>
+            <button class="btn btn-primario mt-1 w-full" type="submit" id="btn-ingresar">Ingresar</button>
+            </form>
+            <p class="mt-6 text-center text-xs text-texto-3">¿Olvidaste la contraseña? Pedile al dueño que la restablezca.</p>
+        </div>
+        </main>
+
+        <script>
+        import { supabase } from '../lib/supabase';
+        import { limpiarCache } from '../lib/sesion';
+        import { conCarga } from '../lib/ui';
+
+        const form = document.getElementById('form-login') as HTMLFormElement;
+        const caja = document.getElementById('login-error')!;
+        const boton = document.getElementById('btn-ingresar') as HTMLButtonElement;
+
+        const mostrarError = (t: string) => {
+            caja.textContent = t;
+            caja.classList.toggle('hidden', !t);
+        };
+
+        if (new URLSearchParams(location.search).get('motivo') === 'pendiente') {
+            mostrarError('Tu usuario todavía no fue habilitado. Pedile al dueño que te dé acceso desde Ajustes.');
+        }
+
+        supabase.auth.getSession().then(({ data }) => {
+            if (data.session && !location.search.includes('motivo')) location.replace('/');
+        });
+
+        form.addEventListener('submit', (ev) => {
+            ev.preventDefault();
+            mostrarError('');
+            conCarga(boton, async () => {
+            const datos = new FormData(form);
+            limpiarCache();
+            const { error } = await supabase.auth.signInWithPassword({
+                email: String(datos.get('email')).trim(),
+                password: String(datos.get('password')),
+            });
+            if (error) {
+                const m = error.message.toLowerCase();
+                if (m.includes('invalid login')) mostrarError('Correo o contraseña incorrectos.');
+                else if (m.includes('email not confirmed')) mostrarError('El correo todavía no fue confirmado.');
+                else if (m.includes('fetch')) mostrarError('No hay conexión con el servidor. Revisá internet.');
+                else mostrarError(error.message);
+                return;
+            }
+            location.replace('/');
+            });
+        });
+        </script>
+    </body>
+</html>

@@ -1,0 +1,94 @@
+---
+// Formularios compartidos de reproducción: servicio, parto y destete
+import Modal from './Modal.astro';
+---
+<Modal id="m-servicio" titulo="Registrar servicio">
+    <input type="hidden" name="id" />
+    <div class="campo" data-campo-cerda>
+        <label class="etiqueta" for="sv-cerda">Cerda</label>
+        <select class="input" id="sv-cerda" name="cerda_id" required></select>
+    </div>
+    <div class="grid grid-cols-2 gap-3">
+        <div class="campo">
+        <label class="etiqueta" for="sv-fecha">Fecha de inseminación</label>
+        <input class="input" id="sv-fecha" name="fecha" type="date" required />
+        </div>
+        <div class="campo">
+        <label class="etiqueta" for="sv-dosis">Dosis de semen</label>
+        <input class="input" id="sv-dosis" name="dosis" type="number" min="1" max="10" step="1" required />
+        </div>
+    </div>
+    <div class="campo" data-campo-resultado>
+        <label class="etiqueta" for="sv-resultado">Resultado</label>
+        <select class="input" id="sv-resultado" name="resultado">
+        <option value="pendiente">A confirmar</option>
+        <option value="prenada">Preñada</option>
+        <option value="vacia">Vacía (repite celo)</option>
+        </select>
+    </div>
+    <div class="resumen-calculo">
+        <div><span>Fecha probable de parto (114 días)</span><strong data-fpp>—</strong></div>
+    </div>
+    <div class="campo">
+        <label class="etiqueta" for="sv-notas">Notas</label>
+        <textarea class="input" id="sv-notas" name="notas" rows="2"></textarea>
+    </div>
+</Modal>
+
+<Modal id="m-parto" titulo="Registrar parto">
+    <input type="hidden" name="id" />
+    <div class="campo" data-campo-cerda>
+        <label class="etiqueta" for="pa-cerda">Cerda</label>
+        <select class="input" id="pa-cerda" name="cerda_id" required></select>
+    </div>
+    <div class="campo">
+        <label class="etiqueta" for="pa-servicio">Servicio correspondiente</label>
+        <select class="input" id="pa-servicio" name="servicio_id"></select>
+    </div>
+    <div class="campo">
+        <label class="etiqueta" for="pa-fecha">Fecha de parto</label>
+        <input class="input" id="pa-fecha" name="fecha" type="date" required />
+    </div>
+    <div class="grid grid-cols-2 gap-3">
+        <div class="campo">
+        <label class="etiqueta" for="pa-totales">Nacidos totales</label>
+        <input class="input" id="pa-totales" name="nacidos_totales" type="number" min="0" max="40" step="1" required />
+        </div>
+        <div class="campo">
+        <label class="etiqueta" for="pa-muertos">Muertos al nacer</label>
+        <input class="input" id="pa-muertos" name="nacidos_muertos" type="number" min="0" max="40" step="1" required />
+        </div>
+    </div>
+    <div class="resumen-calculo">
+        <div class="total"><span>Nacidos vivos (ingresan al stock)</span><strong data-vivos>0</strong></div>
+    </div>
+    <div class="campo">
+        <label class="etiqueta" for="pa-notas">Notas</label>
+        <textarea class="input" id="pa-notas" name="notas" rows="2"></textarea>
+    </div>
+</Modal>
+
+<Modal id="m-destete" titulo="Registrar destete">
+    <input type="hidden" name="parto_id" />
+    <div class="resumen-calculo">
+        <div><span>Cerda</span><strong data-d-cerda>—</strong></div>
+        <div><span>Fecha de parto</span><strong data-d-parto>—</strong></div>
+        <div><span>Nacidos vivos</span><strong data-d-nacidos>0</strong></div>
+        <div><span>Muertes registradas antes del destete</span><strong data-d-bajas>0</strong></div>
+    </div>
+    <div class="grid grid-cols-2 gap-3">
+        <div class="campo">
+        <label class="etiqueta" for="de-fecha">Fecha de destete</label>
+        <input class="input" id="de-fecha" name="fecha_destete" type="date" required />
+        </div>
+        <div class="campo">
+        <label class="etiqueta" for="de-cant">Lechones destetados</label>
+        <input class="input" id="de-cant" name="destetados" type="number" min="0" step="1" required />
+        </div>
+    </div>
+    <div class="resumen-calculo">
+        <div class="total"><span>Muertes en lactancia</span><strong data-d-muertes>0</strong></div>
+    </div>
+    <p class="ayuda">La diferencia entre los vivos y los destetados se descuenta del stock como muertes en lactancia.</p>
+    <button type="button" class="btn btn-fantasma justify-self-start text-error" data-anular-destete hidden>Anular destete</button>
+</Modal>

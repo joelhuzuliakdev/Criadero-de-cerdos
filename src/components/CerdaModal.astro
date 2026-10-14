@@ -1,0 +1,29 @@
+---
+import Modal from './Modal.astro';
+---
+<Modal id="m-cerda" titulo="Nueva cerda">
+    <input type="hidden" name="id" />
+    <div class="grid grid-cols-2 gap-3">
+        <div class="campo">
+            <label class="etiqueta" for="c-caravana">Caravana / identificación</label>
+            <input class="input" id="c-caravana" name="caravana" required maxlength="40" />
+        </div>
+        <div class="campo">
+            <label class="etiqueta" for="c-ingreso">Fecha de ingreso</label>
+            <input class="input" id="c-ingreso" name="fecha_ingreso" type="date" required />
+        </div>
+    </div>
+    <div class="campo">
+        <label class="etiqueta" for="c-origen">Origen (dónde se compró)</label>
+        <input class="input" id="c-origen" name="origen" maxlength="120" placeholder="Ej.: Cabaña San José, propia" />
+    </div>
+    <div class="campo">
+        <label class="etiqueta" for="c-precio">Precio de compra ($)</label>
+        <input class="input" id="c-precio" name="precio_compra" type="number" min="0" step="0.01" />
+        <span class="ayuda">Si se carga, se suma como gasto de reposición en el balance del mes de ingreso.</span>
+    </div>
+    <div class="campo">
+        <label class="etiqueta" for="c-notas">Notas</label>
+        <textarea class="input" id="c-notas" name="notas" rows="2"></textarea>
+    </div>
+</Modal>
