@@ -4,232 +4,406 @@ import Modal from '../components/Modal.astro';
 import Icon from '../components/Icon.astro';
 ---
 <AppLayout titulo="Ajustes" subtitulo="Insumos, usuarios y cuenta">
-    <div class="grid gap-5">
-        <!-- Insumos -->
-        <section class="tarjeta">
-        <div class="tarjeta-cabecera">
-            <div>
-            <h2 class="tarjeta-titulo">Insumos</h2>
-            <p class="text-xs text-texto-3">Núcleos, cereales y remedios que se compran y se usan en las moliendas</p>
-            </div>
-            <button type="button" class="btn btn-sm btn-primario" id="btn-insumo"><Icon name="plus" class="icon size-4" /> Nuevo insumo</button>
+  <div class="grid gap-5">
+    <!-- Usuarios -->
+    <section class="tarjeta" data-solo-dueno>
+      <div class="tarjeta-cabecera">
+        <div>
+          <h2 class="tarjeta-titulo">Usuarios</h2>
+          <p class="text-xs text-texto-3">Las personas que pueden ingresar al sistema y qué pueden ver</p>
         </div>
-        <div class="tabla-contenedor"><table class="tabla tabla-movil" id="t-insumos"></table></div>
-        </section>
+        <button type="button" class="btn btn-sm btn-primario" id="btn-usuario"><Icon name="user-plus" class="icon size-4" /> Nuevo usuario</button>
+      </div>
+      <div class="tabla-contenedor"><table class="tabla tabla-movil" id="t-usuarios"></table></div>
+      <div class="grid gap-1.5 border-t border-borde p-4 text-[13px] text-texto-2 sm:grid-cols-3 sm:gap-4">
+        <p><strong class="text-texto">Dueño:</strong> ve y administra todo, incluidos ventas, gastos, balance y usuarios.</p>
+        <p><strong class="text-texto">Empleado:</strong> carga animales, partos, stock, compras y moliendas. No ve información económica.</p>
+        <p><strong class="text-texto">Sin acceso:</strong> la cuenta existe pero no puede ingresar. Útil para suspender a alguien.</p>
+      </div>
+    </section>
 
-        <!-- Usuarios -->
-        <section class="tarjeta" data-solo-dueno>
-        <div class="tarjeta-cabecera">
-            <div>
-            <h2 class="tarjeta-titulo">Usuarios</h2>
-            <p class="text-xs text-texto-3">El empleado puede cargar datos, pero no ve ventas, gastos ni balance</p>
-            </div>
+    <!-- Insumos -->
+    <section class="tarjeta">
+      <div class="tarjeta-cabecera">
+        <div>
+          <h2 class="tarjeta-titulo">Insumos</h2>
+          <p class="text-xs text-texto-3">Núcleos, cereales y remedios que se compran y se usan en las moliendas</p>
         </div>
-        <div class="tabla-contenedor"><table class="tabla tabla-movil" id="t-usuarios"></table></div>
-        <div class="flex gap-2 border-t border-borde p-4 text-[13px] text-texto-2">
-            <Icon name="info-circle" class="icon size-4 mt-0.5" />
-            <p>
-            Para agregar un usuario: en Supabase entrá a <strong>Authentication → Users → Add user</strong>, cargá su correo y contraseña
-            (marcá «Auto Confirm User»). Después volvé acá y asignale el rol <strong>Empleado</strong>.
-            </p>
-        </div>
-        </section>
+        <button type="button" class="btn btn-sm btn-primario" id="btn-insumo"><Icon name="plus" class="icon size-4" /> Nuevo insumo</button>
+      </div>
+      <div class="tabla-contenedor"><table class="tabla tabla-movil" id="t-insumos"></table></div>
+    </section>
 
-        <!-- Cuenta -->
-        <section class="tarjeta">
-        <div class="tarjeta-cabecera"><h2 class="tarjeta-titulo">Mi cuenta</h2></div>
-        <form id="form-clave" class="grid max-w-md gap-4 p-4">
-            <p class="text-[13px] text-texto-2">Usuario: <strong data-usuario-nombre></strong> (<span data-usuario-rol></span>)</p>
-            <div class="campo">
-            <label class="etiqueta" for="clave1">Nueva contraseña</label>
-            <input class="input" id="clave1" name="clave1" type="password" minlength="8" autocomplete="new-password" required />
-            </div>
-            <div class="campo">
-            <label class="etiqueta" for="clave2">Repetir contraseña</label>
-            <input class="input" id="clave2" name="clave2" type="password" minlength="8" autocomplete="new-password" required />
-            </div>
-            <button type="submit" class="btn btn-primario justify-self-start" id="btn-clave"><Icon name="lock" class="icon size-4" /> Cambiar contraseña</button>
-        </form>
-        </section>
-    </div>
-
-    <Fragment slot="modales">
-        <Modal id="m-insumo" titulo="Nuevo insumo">
-        <input type="hidden" name="id" />
+    <!-- Cuenta -->
+    <section class="tarjeta">
+      <div class="tarjeta-cabecera"><h2 class="tarjeta-titulo">Mi cuenta</h2></div>
+      <form id="form-clave" class="grid max-w-md gap-4 p-4">
+        <p class="text-[13px] text-texto-2">Usuario: <strong data-usuario-nombre></strong> (<span data-usuario-rol></span>)</p>
         <div class="campo">
-            <label class="etiqueta" for="i-nombre">Nombre</label>
-            <input class="input" id="i-nombre" name="nombre" required maxlength="80" />
+          <label class="etiqueta" for="clave1">Nueva contraseña</label>
+          <input class="input" id="clave1" name="clave1" type="password" minlength="8" autocomplete="new-password" required />
         </div>
-        <div class="grid grid-cols-2 gap-3">
-            <div class="campo">
-            <label class="etiqueta" for="i-tipo">Tipo</label>
-            <select class="input" id="i-tipo" name="tipo" required></select>
-            </div>
-            <div class="campo">
-            <label class="etiqueta" for="i-unidad">Unidad</label>
-            <select class="input" id="i-unidad" name="unidad" required></select>
-            </div>
+        <div class="campo">
+          <label class="etiqueta" for="clave2">Repetir contraseña</label>
+          <input class="input" id="clave2" name="clave2" type="password" minlength="8" autocomplete="new-password" required />
         </div>
-        <p class="ayuda">Solo los insumos en kg pueden usarse en las moliendas.</p>
-        </Modal>
-    </Fragment>
+        <button type="submit" class="btn btn-primario justify-self-start" id="btn-clave"><Icon name="lock" class="icon size-4" /> Cambiar contraseña</button>
+      </form>
+    </section>
+  </div>
+
+  <Fragment slot="modales">
+    <Modal id="m-insumo" titulo="Nuevo insumo">
+      <input type="hidden" name="id" />
+      <div class="campo">
+        <label class="etiqueta" for="i-nombre">Nombre</label>
+        <input class="input" id="i-nombre" name="nombre" required maxlength="80" />
+      </div>
+      <div class="grid grid-cols-2 gap-3">
+        <div class="campo">
+          <label class="etiqueta" for="i-tipo">Tipo</label>
+          <select class="input" id="i-tipo" name="tipo" required></select>
+        </div>
+        <div class="campo">
+          <label class="etiqueta" for="i-unidad">Unidad</label>
+          <select class="input" id="i-unidad" name="unidad" required></select>
+        </div>
+      </div>
+      <p class="ayuda">Solo los insumos en kg pueden usarse en las moliendas.</p>
+    </Modal>
+
+    <Modal id="m-usuario" titulo="Nuevo usuario" boton="Crear usuario">
+      <div class="campo">
+        <label class="etiqueta" for="u-nombre">Nombre</label>
+        <input class="input" id="u-nombre" name="nombre" required maxlength="80" placeholder="Ej.: Juan Pérez" autocomplete="off" />
+      </div>
+      <div class="campo">
+        <label class="etiqueta" for="u-email">Correo electrónico</label>
+        <input class="input" id="u-email" name="email" type="email" required maxlength="160" placeholder="juan@ejemplo.com" autocomplete="off" />
+        <span class="ayuda">Es el usuario con el que va a ingresar. No hace falta que revise su correo.</span>
+      </div>
+      <div class="campo">
+        <label class="etiqueta" for="u-clave">Contraseña</label>
+        <div class="flex gap-2">
+          <input class="input num" id="u-clave" name="clave" type="text" required minlength="8" maxlength="72" autocomplete="off" spellcheck="false" />
+          <button type="button" class="btn shrink-0" data-generar="u-clave" title="Generar otra contraseña"><Icon name="refresh" class="icon size-4" /> Generar</button>
+        </div>
+        <span class="ayuda">Mínimo 8 caracteres. Después se la vas a poder pasar a la persona.</span>
+      </div>
+      <div class="campo">
+        <label class="etiqueta" for="u-rol">Rol</label>
+        <select class="input" id="u-rol" name="rol" required>
+          <option value="empleado">Empleado: carga datos, no ve la parte económica</option>
+          <option value="dueno">Dueño: acceso total</option>
+        </select>
+      </div>
+    </Modal>
+
+    <Modal id="m-clave-usuario" titulo="Cambiar contraseña" boton="Guardar contraseña">
+      <input type="hidden" name="id" />
+      <p class="text-[13px] text-texto-2">Nueva contraseña para <strong data-cu-nombre></strong>. La anterior deja de funcionar.</p>
+      <div class="campo">
+        <label class="etiqueta" for="cu-clave">Nueva contraseña</label>
+        <div class="flex gap-2">
+          <input class="input num" id="cu-clave" name="clave" type="text" required minlength="8" maxlength="72" autocomplete="off" spellcheck="false" />
+          <button type="button" class="btn shrink-0" data-generar="cu-clave" title="Generar otra contraseña"><Icon name="refresh" class="icon size-4" /> Generar</button>
+        </div>
+      </div>
+    </Modal>
+
+    <dialog id="m-credenciales" class="modal" aria-labelledby="m-credenciales-titulo">
+      <form method="dialog">
+        <div class="modal-cabecera">
+          <h2 class="modal-titulo" id="m-credenciales-titulo" data-cr-titulo>Usuario creado</h2>
+          <button type="button" class="btn btn-icono" data-cerrar aria-label="Cerrar"><Icon name="x" /></button>
+        </div>
+        <div class="modal-cuerpo">
+          <p class="text-[13px] text-texto-2">Pasale estos datos a la persona para que pueda ingresar:</p>
+          <div class="resumen-calculo">
+            <div><span>Dirección</span><strong class="break-all text-right" data-cr-url></strong></div>
+            <div><span>Correo</span><strong class="break-all text-right" data-cr-email></strong></div>
+            <div><span>Contraseña</span><strong class="text-right" data-cr-clave></strong></div>
+          </div>
+          <p class="ayuda">Por seguridad, la contraseña no se vuelve a mostrar. Si se la olvida, podés ponerle una nueva desde esta pantalla.</p>
+        </div>
+        <div class="modal-pie">
+          <button type="button" class="btn" id="btn-copiar-cred"><Icon name="copy" class="icon size-4" /> Copiar datos</button>
+          <button class="btn btn-primario" value="ok">Listo</button>
+        </div>
+      </form>
+    </dialog>
+  </Fragment>
 </AppLayout>
 
 <script>
-    import { supabase } from '../lib/supabase';
-    import { iniciarPagina, type Perfil } from '../lib/sesion';
-    import { esc } from '../lib/formato';
-    import { aviso, avisoError, alAccion, botonAccion, conCarga, confirmar, eliminarFila, guardarFila, leerForm, llenarForm, modal, renderTabla, tablaCargando, type Columna } from '../lib/ui';
-    import { ROLES, TIPOS_INSUMO, UNIDADES, opciones } from '../lib/etiquetas';
+  import { supabase } from '../lib/supabase';
+  import { iniciarPagina, type Perfil } from '../lib/sesion';
+  import { esc } from '../lib/formato';
+  import { aviso, avisoError, alAccion, botonAccion, conCarga, confirmar, eliminarFila, guardarFila, leerForm, llenarForm, modal, renderTabla, tablaCargando, type Columna } from '../lib/ui';
+  import { ROLES, TIPOS_INSUMO, UNIDADES, opciones } from '../lib/etiquetas';
+  import { generarClave, llamarApi } from '../lib/api';
 
-    const tIns = document.getElementById('t-insumos') as HTMLTableElement;
-    const tUsu = document.getElementById('t-usuarios') as HTMLTableElement;
-    let insumos: any[] = [];
-    let yo: Perfil;
+  const tIns = document.getElementById('t-insumos') as HTMLTableElement;
+  const tUsu = document.getElementById('t-usuarios') as HTMLTableElement;
+  let insumos: any[] = [];
+  let yo: Perfil;
 
-    /* -------- Insumos -------- */
-    async function cargarInsumos() {
-        tablaCargando(tIns, 4, 5);
-        const { data, error } = await supabase.from('insumos').select('*').order('tipo').order('nombre');
-        if (error) return avisoError(error);
-        insumos = data ?? [];
-        const col: Columna<any>[] = [
-        { titulo: 'Nombre', valor: (i) => esc(i.nombre) },
-        { titulo: 'Tipo', valor: (i) => TIPOS_INSUMO[i.tipo] },
-        { titulo: 'Unidad', valor: (i) => UNIDADES[i.unidad] },
-        { titulo: 'Estado', valor: (i) => (i.activo ? '<span class="badge badge-ok">Activo</span>' : '<span class="badge">Inactivo</span>') },
-        {
-            titulo: '',
-            clase: 'acciones',
-            valor: (i) =>
-            `<button type="button" class="btn btn-sm btn-fantasma" data-accion="activo" data-id="${i.id}">${i.activo ? 'Desactivar' : 'Activar'}</button>` +
-            botonAccion('editar', i.id, 'pencil', 'Editar') +
-            botonAccion('eliminar', i.id, 'trash', 'Eliminar'),
-        },
-        ];
-        renderTabla(tIns, col, insumos, { vacio: 'No hay insumos cargados.' });
-    }
+  /* -------- Insumos -------- */
+  async function cargarInsumos() {
+    tablaCargando(tIns, 4, 5);
+    const { data, error } = await supabase.from('insumos').select('*').order('tipo').order('nombre');
+    if (error) return avisoError(error);
+    insumos = data ?? [];
+    const col: Columna<any>[] = [
+      { titulo: 'Nombre', valor: (i) => esc(i.nombre) },
+      { titulo: 'Tipo', valor: (i) => TIPOS_INSUMO[i.tipo] },
+      { titulo: 'Unidad', valor: (i) => UNIDADES[i.unidad] },
+      { titulo: 'Estado', valor: (i) => (i.activo ? '<span class="badge badge-ok">Activo</span>' : '<span class="badge">Inactivo</span>') },
+      {
+        titulo: '',
+        clase: 'acciones',
+        valor: (i) =>
+          `<button type="button" class="btn btn-sm btn-fantasma" data-accion="activo" data-id="${i.id}">${i.activo ? 'Desactivar' : 'Activar'}</button>` +
+          botonAccion('editar', i.id, 'pencil', 'Editar') +
+          botonAccion('eliminar', i.id, 'trash', 'Eliminar'),
+      },
+    ];
+    renderTabla(tIns, col, insumos, { vacio: 'No hay insumos cargados.' });
+  }
 
-    const m = modal('m-insumo');
-    (m.form.elements.namedItem('tipo') as HTMLSelectElement).innerHTML = opciones(TIPOS_INSUMO);
-    (m.form.elements.namedItem('unidad') as HTMLSelectElement).innerHTML = opciones(UNIDADES);
+  const m = modal('m-insumo');
+  (m.form.elements.namedItem('tipo') as HTMLSelectElement).innerHTML = opciones(TIPOS_INSUMO);
+  (m.form.elements.namedItem('unidad') as HTMLSelectElement).innerHTML = opciones(UNIDADES);
 
-    document.getElementById('btn-insumo')!.addEventListener('click', () => {
-        m.form.reset();
-        llenarForm(m.form, { id: '', tipo: 'nucleo', unidad: 'kg' });
-        m.abrir('Nuevo insumo');
-    });
+  document.getElementById('btn-insumo')!.addEventListener('click', () => {
+    m.form.reset();
+    llenarForm(m.form, { id: '', tipo: 'nucleo', unidad: 'kg' });
+    m.abrir('Nuevo insumo');
+  });
 
-    alAccion(tIns, {
-        editar: (id) => {
-        const i = insumos.find((x) => String(x.id) === id);
-        if (!i) return;
-        m.form.reset();
-        llenarForm(m.form, i);
-        m.abrir('Editar insumo');
-        },
-        activo: async (id, btn) => {
-        const i = insumos.find((x) => String(x.id) === id);
-        if (!i) return;
-        conCarga(btn, async () => {
-            try {
-            await guardarFila('insumos', { activo: !i.activo }, id);
-            aviso(i.activo ? 'Insumo desactivado' : 'Insumo activado');
-            cargarInsumos();
-            } catch (e) {
-            avisoError(e);
-            }
-        });
-        },
-        eliminar: async (id) => {
-        if (!(await confirmar('¿Eliminar este insumo? Si ya tiene compras o moliendas, no se podrá eliminar (desactivalo en su lugar).', { boton: 'Eliminar' }))) return;
+  alAccion(tIns, {
+    editar: (id) => {
+      const i = insumos.find((x) => String(x.id) === id);
+      if (!i) return;
+      m.form.reset();
+      llenarForm(m.form, i);
+      m.abrir('Editar insumo');
+    },
+    activo: async (id, btn) => {
+      const i = insumos.find((x) => String(x.id) === id);
+      if (!i) return;
+      conCarga(btn, async () => {
         try {
-            await eliminarFila('insumos', id);
-            aviso('Insumo eliminado');
-            cargarInsumos();
-        } catch (e: any) {
-            if (e?.code === '23503') aviso('Este insumo tiene compras o moliendas. Desactivalo en lugar de eliminarlo.', 'error');
-            else avisoError(e);
-        }
-        },
-    });
-
-    m.form.addEventListener('submit', (ev) => {
-        ev.preventDefault();
-        conCarga(m.form.querySelector('[data-guardar]'), async () => {
-        const d = leerForm(m.form);
-        try {
-            await guardarFila('insumos', { nombre: d.nombre, tipo: d.tipo, unidad: d.unidad }, d.id || null);
-            m.cerrar();
-            aviso(d.id ? 'Insumo actualizado' : 'Insumo creado');
-            cargarInsumos();
+          await guardarFila('insumos', { activo: !i.activo }, id);
+          aviso(i.activo ? 'Insumo desactivado' : 'Insumo activado');
+          cargarInsumos();
         } catch (e) {
-            avisoError(e);
+          avisoError(e);
         }
-        });
-    });
-
-    /* -------- Usuarios -------- */
-    async function cargarUsuarios() {
-        tablaCargando(tUsu, 3, 2);
-        const { data, error } = await supabase.from('perfiles').select('*').order('creado_en');
-        if (error) return avisoError(error);
-        const col: Columna<any>[] = [
-        { titulo: 'Nombre', valor: (u) => esc(u.nombre) + (u.id === yo.id ? ' <span class="badge">Vos</span>' : '') },
-        { titulo: 'Correo', valor: (u) => esc(u.email ?? '—') },
-        {
-            titulo: 'Rol',
-            clase: 'acciones',
-            valor: (u) =>
-            u.id === yo.id
-                ? `<span class="badge badge-marca">${ROLES[u.rol]}</span>`
-                : `<select class="input h-8 w-36 text-[13px]" data-rol="${u.id}" aria-label="Rol de ${esc(u.nombre)}">${opciones(ROLES, u.rol)}</select>`,
-        },
-        ];
-        renderTabla(tUsu, col, data ?? []);
-    }
-
-    tUsu.addEventListener('change', async (ev) => {
-        const sel = ev.target as HTMLSelectElement;
-        const id = sel.dataset.rol;
-        if (!id) return;
-        sel.disabled = true;
-        try {
-        await guardarFila('perfiles', { rol: sel.value }, id);
-        aviso('Rol actualizado');
-        } catch (e) {
-        avisoError(e);
-        cargarUsuarios();
-        } finally {
-        sel.disabled = false;
-        }
-    });
-
-    /* -------- Contraseña -------- */
-    const fc = document.getElementById('form-clave') as HTMLFormElement;
-    fc.addEventListener('submit', (ev) => {
-        ev.preventDefault();
-        const d = leerForm(fc);
-        if (d.clave1 !== d.clave2) {
-        aviso('Las contraseñas no coinciden.', 'error');
-        return;
-        }
-        conCarga(document.getElementById('btn-clave') as HTMLButtonElement, async () => {
-        const { error } = await supabase.auth.updateUser({ password: d.clave1 });
-        if (error) {
-            aviso(/different from the old/i.test(error.message) ? 'La nueva contraseña debe ser distinta de la actual.' : error.message, 'error');
-            return;
-        }
-        fc.reset();
-        aviso('Contraseña actualizada');
-        });
-    });
-
-    iniciarPagina().then((p) => {
-        yo = p;
-        // El layout ya pinta nombre y rol; repetir para el bloque de cuenta
-        document.querySelectorAll<HTMLElement>('[data-usuario-nombre]').forEach((el) => (el.textContent = p.nombre || p.email || ''));
+      });
+    },
+    eliminar: async (id) => {
+      if (!(await confirmar('¿Eliminar este insumo? Si ya tiene compras o moliendas, no se podrá eliminar (desactivalo en su lugar).', { boton: 'Eliminar' }))) return;
+      try {
+        await eliminarFila('insumos', id);
+        aviso('Insumo eliminado');
         cargarInsumos();
-        if (p.rol === 'dueno') cargarUsuarios();
+      } catch (e: any) {
+        if (e?.code === '23503') aviso('Este insumo tiene compras o moliendas. Desactivalo en lugar de eliminarlo.', 'error');
+        else avisoError(e);
+      }
+    },
+  });
+
+  m.form.addEventListener('submit', (ev) => {
+    ev.preventDefault();
+    conCarga(m.form.querySelector('[data-guardar]'), async () => {
+      const d = leerForm(m.form);
+      try {
+        await guardarFila('insumos', { nombre: d.nombre, tipo: d.tipo, unidad: d.unidad }, d.id || null);
+        m.cerrar();
+        aviso(d.id ? 'Insumo actualizado' : 'Insumo creado');
+        cargarInsumos();
+      } catch (e) {
+        avisoError(e);
+      }
     });
+  });
+
+  /* -------- Usuarios -------- */
+  let usuarios: any[] = [];
+
+  async function cargarUsuarios() {
+    tablaCargando(tUsu, 4, 2);
+    const { data, error } = await supabase.from('perfiles').select('*').order('creado_en');
+    if (error) return avisoError(error);
+    usuarios = data ?? [];
+    const col: Columna<any>[] = [
+      { titulo: 'Nombre', valor: (u) => esc(u.nombre) + (u.id === yo.id ? ' <span class="badge">Vos</span>' : '') },
+      { titulo: 'Correo', valor: (u) => esc(u.email ?? '—') },
+      {
+        titulo: 'Rol',
+        valor: (u) =>
+          u.id === yo.id
+            ? `<span class="badge badge-marca">${ROLES[u.rol]}</span>`
+            : `<select class="input h-8 w-36 text-[13px]" data-rol="${u.id}" aria-label="Rol de ${esc(u.nombre)}">${opciones(ROLES, u.rol)}</select>`,
+      },
+      {
+        titulo: '',
+        clase: 'acciones',
+        valor: (u) =>
+          u.id === yo.id
+            ? '<span class="text-xs text-texto-3">Tu contraseña se cambia abajo</span>'
+            : botonAccion('clave', u.id, 'key', 'Cambiar contraseña') + botonAccion('eliminar', u.id, 'trash', 'Eliminar usuario'),
+      },
+    ];
+    renderTabla(tUsu, col, usuarios, { vacio: 'No hay usuarios.' });
+  }
+
+  // Cambiar rol
+  tUsu.addEventListener('change', async (ev) => {
+    const sel = ev.target as HTMLSelectElement;
+    const id = sel.dataset.rol;
+    if (!id) return;
+    sel.disabled = true;
+    try {
+      await guardarFila('perfiles', { rol: sel.value }, id);
+      aviso(sel.value === 'pendiente' ? 'Acceso suspendido' : 'Rol actualizado');
+    } catch (e) {
+      avisoError(e);
+    } finally {
+      sel.disabled = false;
+      cargarUsuarios();
+    }
+  });
+
+  // Botones "Generar" contraseña
+  document.querySelectorAll<HTMLButtonElement>('[data-generar]').forEach((b) =>
+    b.addEventListener('click', () => {
+      const inp = document.getElementById(b.dataset.generar!) as HTMLInputElement;
+      inp.value = generarClave();
+      inp.focus();
+    })
+  );
+
+  // Mostrar los datos de ingreso para pasárselos a la persona
+  const dlgCred = document.getElementById('m-credenciales') as HTMLDialogElement;
+  let textoCred = '';
+  function mostrarCredenciales(titulo: string, email: string, clave: string) {
+    const url = `${location.origin}/login/`;
+    const q = (k: string) => dlgCred.querySelector(`[data-cr-${k}]`) as HTMLElement;
+    q('titulo').textContent = titulo;
+    q('url').textContent = url;
+    q('email').textContent = email;
+    q('clave').textContent = clave;
+    textoCred = `Datos para ingresar al sistema del criadero:\nDirección: ${url}\nCorreo: ${email}\nContraseña: ${clave}`;
+    dlgCred.showModal();
+  }
+  document.getElementById('btn-copiar-cred')!.addEventListener('click', async () => {
+    try {
+      await navigator.clipboard.writeText(textoCred);
+      aviso('Datos copiados. Ya los podés pegar en WhatsApp o un mail.');
+    } catch {
+      aviso('No se pudo copiar automáticamente. Anotá los datos a mano.', 'error');
+    }
+  });
+
+  // Nuevo usuario
+  const mu = modal('m-usuario');
+  document.getElementById('btn-usuario')!.addEventListener('click', () => {
+    mu.form.reset();
+    (mu.form.elements.namedItem('clave') as HTMLInputElement).value = generarClave();
+    mu.abrir('Nuevo usuario');
+  });
+  mu.form.addEventListener('submit', (ev) => {
+    ev.preventDefault();
+    conCarga(mu.form.querySelector('[data-guardar]'), async () => {
+      const d = leerForm(mu.form);
+      try {
+        await llamarApi('POST', '/api/usuarios', { nombre: d.nombre, email: d.email, clave: d.clave, rol: d.rol });
+        mu.cerrar();
+        aviso('Usuario creado');
+        cargarUsuarios();
+        mostrarCredenciales('Usuario creado', d.email.toLowerCase(), d.clave);
+      } catch (e) {
+        avisoError(e);
+      }
+    });
+  });
+
+  // Cambiar contraseña de otro usuario
+  const mc = modal('m-clave-usuario');
+  mc.form.addEventListener('submit', (ev) => {
+    ev.preventDefault();
+    conCarga(mc.form.querySelector('[data-guardar]'), async () => {
+      const d = leerForm(mc.form);
+      const u = usuarios.find((x) => x.id === d.id);
+      try {
+        await llamarApi('PATCH', '/api/usuarios', { id: d.id, clave: d.clave });
+        mc.cerrar();
+        aviso('Contraseña actualizada');
+        mostrarCredenciales('Contraseña actualizada', u?.email ?? '', d.clave);
+      } catch (e) {
+        avisoError(e);
+      }
+    });
+  });
+
+  alAccion(tUsu, {
+    clave: (id) => {
+      const u = usuarios.find((x) => x.id === id);
+      if (!u) return;
+      mc.form.reset();
+      (mc.form.elements.namedItem('id') as HTMLInputElement).value = id;
+      (mc.form.querySelector('[data-cu-nombre]') as HTMLElement).textContent = u.nombre || u.email;
+      (mc.form.elements.namedItem('clave') as HTMLInputElement).value = generarClave();
+      mc.abrir();
+    },
+    eliminar: async (id, btn) => {
+      const u = usuarios.find((x) => x.id === id);
+      if (!u) return;
+      const ok = await confirmar(
+        `Se eliminará la cuenta de ${u.nombre || u.email} y no podrá volver a ingresar. Los datos que cargó se conservan. Si solo querés suspenderla, cambiale el rol a «Sin acceso».`,
+        { titulo: 'Eliminar usuario', boton: 'Eliminar' }
+      );
+      if (!ok) return;
+      conCarga(btn, async () => {
+        try {
+          await llamarApi('DELETE', '/api/usuarios', { id });
+          aviso('Usuario eliminado');
+          cargarUsuarios();
+        } catch (e) {
+          avisoError(e);
+        }
+      });
+    },
+  });
+
+  /* -------- Contraseña -------- */
+  const fc = document.getElementById('form-clave') as HTMLFormElement;
+  fc.addEventListener('submit', (ev) => {
+    ev.preventDefault();
+    const d = leerForm(fc);
+    if (d.clave1 !== d.clave2) {
+      aviso('Las contraseñas no coinciden.', 'error');
+      return;
+    }
+    conCarga(document.getElementById('btn-clave') as HTMLButtonElement, async () => {
+      const { error } = await supabase.auth.updateUser({ password: d.clave1 });
+      if (error) {
+        aviso(/different from the old/i.test(error.message) ? 'La nueva contraseña debe ser distinta de la actual.' : error.message, 'error');
+        return;
+      }
+      fc.reset();
+      aviso('Contraseña actualizada');
+    });
+  });
+
+  iniciarPagina().then((p) => {
+    yo = p;
+    // El layout ya pinta nombre y rol; repetir para el bloque de cuenta
+    document.querySelectorAll<HTMLElement>('[data-usuario-nombre]').forEach((el) => (el.textContent = p.nombre || p.email || ''));
+    cargarInsumos();
+    if (p.rol === 'dueno') cargarUsuarios();
+  });
 </script>
