@@ -10,7 +10,7 @@ import Icon from '../components/Icon.astro';
         <div class="tarjeta kpi"><span class="kpi-etiqueta">Lechones</span><span class="kpi-valor" data-k="lechon">—</span><span class="kpi-detalle">0 a 69 días</span></div>
         <div class="tarjeta kpi"><span class="kpi-etiqueta">Cachorros</span><span class="kpi-valor" data-k="cachorro">—</span><span class="kpi-detalle">70 a 119 días</span></div>
         <div class="tarjeta kpi"><span class="kpi-etiqueta">Capones</span><span class="kpi-valor" data-k="capon">—</span><span class="kpi-detalle">120 días o más</span></div>
-        <div class="tarjeta kpi"><span class="kpi-etiqueta">Total de animales</span><span class="kpi-valor" data-k="total">—</span><span class="kpi-detalle" data-k-madres>+ cerdas madres</span></div>
+        <div class="tarjeta kpi"><span class="kpi-etiqueta">Total en el criadero</span><span class="kpi-valor" data-k="total">—</span><span class="kpi-detalle" data-k-madres>+ cerdas madres</span></div>
     </div>
 
     <div class="grid gap-5">
@@ -117,7 +117,7 @@ import Icon from '../components/Icon.astro';
         set('cachorro', String(suma('cachorro')));
         set('capon', String(suma('capon')));
         set('total', String(tot + madres));
-        (document.querySelector('[data-k-madres]') as HTMLElement).textContent = `Incluye ${madres} cerdas madres`;
+        (document.querySelector('[data-k-madres]') as HTMLElement).textContent = `${madres} ${madres === 1 ? 'cerda madre' : 'cerdas madres'} + ${tot} de engorde`;
         render();
     }
 
@@ -136,7 +136,7 @@ import Icon from '../components/Icon.astro';
         ];
         const total = lista.reduce((a, c) => a + c.vivos, 0);
         renderTabla(tCam, col, lista, {
-        vacio: 'No hay animales en stock. El stock se genera al registrar partos en Reproducción.',
+        vacio: filtroCat ? 'No hay animales en esta categoría.' : 'Todavía no hay lechones, cachorros ni capones. Se suman solos al registrar un parto en Reproducción.',
         pie: ['Total', '', '', '', '', '', String(total), '', ''],
         });
 
